@@ -261,7 +261,7 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Demo／未定位誠實橫幅（設計 §5）。
+/// Demo／未定位誠實橫幅（設計 §5）：單一橫幅，可合併兩種狀態。
 class _StatusBanner extends StatelessWidget {
   const _StatusBanner({required this.state});
 
@@ -272,7 +272,8 @@ class _StatusBanner extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final Color bg;
     final String title;
-    final String subtitle;
+    final String? subtitle;
+    final bool showLocateCta = !state.locationOk;
 
     if (state.isDemo && !state.locationOk) {
       bg = scheme.tertiaryContainer;
@@ -285,7 +286,7 @@ class _StatusBanner extends StatelessWidget {
     } else {
       bg = scheme.errorContainer;
       title = '需要定位才能找附近餐廳';
-      subtitle = '請允許定位權限後下拉重新整理';
+      subtitle = null;
     }
 
     return Material(
@@ -302,13 +303,25 @@ class _StatusBanner extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            if (showLocateCta) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  onPressed: () => context.read<AppState>().refreshPlaces(),
+                  child: const Text('開啟定位'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

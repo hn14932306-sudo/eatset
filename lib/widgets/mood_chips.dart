@@ -21,6 +21,7 @@ class MoodChips extends StatelessWidget {
       runSpacing: compact ? 6 : 8,
       children: Mood.values.map((m) {
         final selected = m == value;
+        final scheme = Theme.of(context).colorScheme;
         return FilterChip(
           label: Text(
             m.labelZh,
@@ -29,6 +30,7 @@ class MoodChips extends StatelessWidget {
           selected: selected,
           onSelected: (_) => onChanged(m),
           showCheckmark: false,
+          selectedColor: scheme.secondaryContainer,
           visualDensity:
               compact ? VisualDensity.compact : VisualDensity.standard,
           materialTapTargetSize: compact

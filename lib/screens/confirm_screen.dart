@@ -23,7 +23,7 @@ class ConfirmScreen extends StatelessWidget {
         SnackBar(
           content: Text(
             kIsWeb
-                ? '無法開啟地圖分頁，請允許彈出式視窗後再試'
+                ? '無法開啟地圖。請允許彈出式視窗，或改用 App 開啟地圖'
                 : '無法開啟地圖，請確認裝置已安裝瀏覽器或 Google Maps',
           ),
         ),
@@ -66,6 +66,16 @@ class ConfirmScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   '示範流程完成 · 開啟地圖可看位置',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+              if (kIsWeb) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '網頁版可能受瀏覽器限制；地圖體驗建議用 App',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
