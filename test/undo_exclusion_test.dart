@@ -1,6 +1,5 @@
 import 'package:eatset/models/meal_slot.dart';
 import 'package:eatset/models/place.dart';
-import 'package:eatset/models/user_prefs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -8,6 +7,8 @@ void main() {
     final a = Place(
       id: 'a',
       name: '老王紅燒牛肉麵',
+      lat: 25.0,
+      lng: 121.5,
       rating: 4.5,
       userRatingsTotal: 100,
       distanceMeters: 100,
@@ -17,6 +18,8 @@ void main() {
     final b = Place(
       id: 'b',
       name: '另一家',
+      lat: 25.01,
+      lng: 121.51,
       rating: 4.6,
       userRatingsTotal: 100,
       distanceMeters: 120,
