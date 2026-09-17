@@ -49,6 +49,7 @@ class HomeScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () => context.read<AppState>().refreshPlaces(),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           children: [
             if (state.isDemo || !state.locationOk)
@@ -275,10 +276,10 @@ class _StatusBanner extends StatelessWidget {
     final String? subtitle;
     final bool showLocateCta = !state.locationOk;
 
-    if (state.isDemo && !state.locationOk) {
-      bg = scheme.tertiaryContainer;
-      title = '示範模式 · 非你附近的真實店家';
-      subtitle = '目前用示範店家 · 何時開定位都可以';
+    if (!state.locationOk) {
+      bg = state.isDemo ? scheme.tertiaryContainer : scheme.errorContainer;
+      title = '需要定位才能找附近餐廳';
+      subtitle = state.isDemo ? '目前先用示範店家 · 何時開定位都可以' : null;
     } else if (state.isDemo) {
       bg = scheme.tertiaryContainer;
       title = '示範模式 · 非你附近的真實店家';
@@ -380,10 +381,6 @@ class _EmptyDecisionCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
             ],
-            FilledButton(
-              onPressed: () => context.read<AppState>().refreshPlaces(),
-              child: const Text('再試一次'),
-            ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).push(
