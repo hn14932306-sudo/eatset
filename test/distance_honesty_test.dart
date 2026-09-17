@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('hides misleading meters when showRealDistance is false',
-      (tester) async {
+  testWidgets('hides misleading meters when showRealDistance is false', (
+    tester,
+  ) async {
     const place = Place(
       id: 'demo_x',
       name: '示範麵店',
@@ -15,24 +16,17 @@ void main() {
       isDemo: true,
       rating: 4.5,
     );
-    const decision = Decision(
-      place: place,
-      reasonZh: '測試理由',
-      score: 1,
-    );
+    const decision = Decision(place: place, reasonZh: '測試理由', score: 1);
 
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: DecisionCard(
-            decision: decision,
-            showRealDistance: false,
-          ),
+          body: DecisionCard(decision: decision, showRealDistance: false),
         ),
       ),
     );
 
-    expect(find.text('示範距離'), findsOneWidget);
+    expect(find.text('4.5'), findsOneWidget);
     expect(find.textContaining('公尺'), findsNothing);
   });
 
@@ -46,24 +40,47 @@ void main() {
       isDemo: true,
       rating: 4.5,
     );
-    const decision = Decision(
-      place: place,
-      reasonZh: '測試理由',
-      score: 1,
-    );
+    const decision = Decision(place: place, reasonZh: '測試理由', score: 1);
 
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: DecisionCard(
-            decision: decision,
-            showRealDistance: true,
-          ),
+          body: DecisionCard(decision: decision, showRealDistance: true),
         ),
       ),
     );
 
     expect(find.textContaining('156'), findsOneWidget);
+    expect(find.text('4.5'), findsNothing);
+  });
+
+  testWidgets('address is folded until its disclosure is expanded', (
+    tester,
+  ) async {
+    const place = Place(
+      id: 'address_x',
+      name: '地址測試店',
+      lat: 25.0,
+      lng: 121.5,
+      vicinity: '忠孝東路一段',
+      distanceMeters: 240,
+      rating: 4.2,
+    );
+    const decision = Decision(place: place, reasonZh: '測試理由', score: 1);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: DecisionCard(decision: decision)),
+      ),
+    );
+
+    expect(find.text('地址'), findsOneWidget);
+    expect(find.text('忠孝東路一段'), findsNothing);
+
+    await tester.tap(find.text('地址'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('忠孝東路一段'), findsOneWidget);
   });
 
   testWidgets('balance nudge banner is visible', (tester) async {
@@ -83,9 +100,7 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: DecisionCard(decision: decision),
-        ),
+        home: Scaffold(body: DecisionCard(decision: decision)),
       ),
     );
 

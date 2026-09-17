@@ -222,17 +222,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.pop(ctx);
                   final placeId = state.current?.place.id;
+                  if (placeId == null) return;
                   final name =
                       await context.read<AppState>().excludeCurrentPlace();
                   if (!context.mounted || name == null) return;
                   _showUndoSnackBar(
                     context,
                     message: '已排除「$name」',
-                    onUndo: placeId == null
-                        ? null
-                        : () => context
-                            .read<AppState>()
-                            .removeExcludedPlace(placeId),
+                    onUndo: () => context
+                        .read<AppState>()
+                        .removeExcludedPlace(placeId),
                   );
                 },
               ),
@@ -300,21 +299,17 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showUndoSnackBar(
     BuildContext context, {
     required String message,
-    Future<void> Function()? onUndo,
+    required Future<void> Function() onUndo,
   }) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
-        action: onUndo == null
-            ? null
-            : SnackBarAction(
-                label: '復原',
-                onPressed: () {
-                  onUndo();
-                },
-              ),
+        action: SnackBarAction(
+          label: '復原',
+          onPressed: onUndo,
+        ),
       ),
     );
   }
@@ -488,13 +483,26 @@ class _EmptyDecisionCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
             ],
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                );
-              },
-              child: const Text('管理排除'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                      );
+                    },
+                    child: const Text('管理排除'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => state.refreshPlaces(),
+                    child: const Text('再試一次'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
