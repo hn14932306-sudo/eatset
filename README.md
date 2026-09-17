@@ -40,7 +40,7 @@ flutter run -d chrome   # Web 亦可，定位可能受限
 
 ## 使用 Google Places API
 
-完整步驟（啟用 API、限制金鑰、驗證歸因）：見 **[docs/places-setup.md](docs/places-setup.md)**。
+完整步驟（啟用 API、限制金鑰、驗證歸因）：見 **[docs/places-setup.md；本機模擬器見 [local-android-run.md](docs/local-android-run.md)](docs/places-setup.md)**。
 
 1. 在 [Google Cloud Console](https://console.cloud.google.com/) 啟用 **Places API**（Nearby Search）。
 2. 建立 API 金鑰，並依平台限制（Android `com.eatset.eatset`／iOS `com.eatset.eatset`／Web referrer）。
@@ -71,7 +71,7 @@ cp lib/config/api_keys.example.dart lib/config/api_keys.local.dart
 
 ### 決策篩選（已內建）
 
-Nearby 回傳後由 `DecisionEngine` 偏好營業中、較高評分店家（見 `docs/places-setup.md`）。
+Nearby 回傳後由 `DecisionEngine` 偏好營業中、較高評分店家（見 `docs/places-setup.md；本機模擬器見 [local-android-run.md](docs/local-android-run.md)`）。
 
 ## 測試與分析
 

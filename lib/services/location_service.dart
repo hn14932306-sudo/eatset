@@ -27,8 +27,7 @@ enum LocationFailureReason {
 
 /// 定位結果：成功帶座標，失敗帶原因。
 class LocationResult {
-  const LocationResult.success(this.location)
-      : failure = null;
+  const LocationResult.success(this.location) : failure = null;
 
   const LocationResult.failure(this.failure) : location = null;
 
@@ -38,9 +37,17 @@ class LocationResult {
   bool get ok => location != null;
 }
 
-/// 定位服務；失敗時回傳帶原因的 [LocationResult]，由上層改用 Demo。
+/// 定位服務；失敗時回傳帶原因的 [LocationResult]。
 class LocationService {
+  /// Debug／模擬器常用：台北車站附近（與 Demo 錨點一致）。
+  static const UserLocation debugFallbackLocation = UserLocation(
+    lat: 25.0478,
+    lng: 121.5170,
+  );
+
   /// 取得目前位置；會在 denied 時再請求一次權限。
+  /// 模擬器常對 [getCurrentPosition] 逾時，故會後備 [getLastKnownPosition]；
+  /// Debug 建置若仍失敗，使用固定測試座標（避免模擬器卡死在「定位失敗」）。
   Future<LocationResult> getCurrentLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -63,17 +70,57 @@ class LocationService {
         return const LocationResult.failure(LocationFailureReason.denied);
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
-      return LocationResult.success(
-        UserLocation(lat: pos.latitude, lng: pos.longitude),
-      );
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.low,
+            timeLimit: Duration(seconds: 6),
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('getCurrentPosition failed, try last known: $e\n$st');
+      }
+
+      pos ??= await Geolocator.getLastKnownPosition();
+
+      if (pos == null &&
+          !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: AndroidSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: const Duration(seconds: 6),
+              forceLocationManager: true,
+            ),
+          );
+        } catch (e, st) {
+          debugPrint('forceLocationManager getCurrentPosition failed: $e\n$st');
+        }
+        pos ??= await Geolocator.getLastKnownPosition();
+      }
+
+      if (pos != null) {
+        return LocationResult.success(
+          UserLocation(lat: pos.latitude, lng: pos.longitude),
+        );
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          'Location unavailable; using debug fallback '
+          '(${debugFallbackLocation.lat}, ${debugFallbackLocation.lng})',
+        );
+        return const LocationResult.success(debugFallbackLocation);
+      }
+
+      return const LocationResult.failure(LocationFailureReason.error);
     } catch (e, st) {
       debugPrint('getCurrentLocation failed: $e\n$st');
+      if (kDebugMode) {
+        return const LocationResult.success(debugFallbackLocation);
+      }
       return const LocationResult.failure(LocationFailureReason.error);
     }
   }

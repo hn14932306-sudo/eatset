@@ -104,3 +104,7 @@ Nearby Search 回傳原始餐廳列表後，由 `DecisionEngine`：
 - 評分時偏好較高評分／較近距離
 
 因此 API 請求不加 `opennow` 參數，避免營業中過少時整批失敗落入 Demo。
+
+## 相關文件
+
+- Windows 模擬器／Flutter 版本／定位逾時：[local-android-run.md](./local-android-run.md)

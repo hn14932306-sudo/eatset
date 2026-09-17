@@ -1,0 +1,97 @@
+# 本機 Android 模擬器執行筆記（DESKTOP／Windows）
+
+給在 Windows 上跑 `E:\project\eatset`、驗證真 Places 與定位用。  
+Places 金鑰步驟見 [places-setup.md](./places-setup.md)。
+
+## 成功標準
+
+- `flutter run -d emulator-…` 能裝上模擬器
+- 有金鑰時底部可見「店家資料來自 Google」
+- Debug 建置下，即使模擬器 GPS 逾時，也不應一直卡在紅色「定位失敗」橫幅（會用台北測試座標）
+
+## 1. Flutter／JDK（重要）
+
+本專案與開發機對齊：
+
+| 項目 | 建議 |
+|------|------|
+| Flutter | **3.35.x**（勿用過新的 3.47，會要求 AGP 9／Gradle 9／Kotlin 2.2+） |
+| JDK | **17+**（本機用 Microsoft JDK 21 亦可） |
+| 模擬器 | **API 31+**（API 28 在新 Flutter 會標 unsupported） |
+
+設定 JDK（PowerShell）：
+
+```powershell
+flutter config --jdk-dir="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot"
+```
+
+確認：
+
+```powershell
+flutter --version
+flutter doctor
+```
+
+## 2. 模擬器
+
+建議 AVD：`Pixel_API_31`（`system-images;android-31;google_apis;x86_64`）。
+
+```powershell
+emulator -avd Pixel_API_31 -no-snapshot-load
+adb devices
+flutter devices
+```
+
+若出現 `unauthorized`：清除 AVD 資料後冷開機，或在模擬器上允許 USB 偵錯。
+
+## 3. 帶 Places 金鑰執行
+
+在專案根目錄（**勿把金鑰 commit／貼到聊天**）：
+
+```powershell
+cd E:\project\eatset
+flutter pub get
+flutter run -d emulator-5554 --dart-define=GOOGLE_PLACES_API_KEY=你的金鑰
+```
+
+裝置 id 以 `flutter devices` 為準。不要選 `windows` 桌面目標（本專案未開 Windows 桌面）。
+
+Android 金鑰限制：
+
+- 套件名：`com.eatset.eatset`
+- Debug SHA-1：用本機 `debug.keystore` 取得（換電腦會變）
+
+## 4. 定位在模擬器上的行為
+
+常見現象：`Geolocator.getCurrentPosition` **TimeoutException（約 6～12 秒）**，權限已允許仍失敗。這是模擬器 GPS／fused location 問題，不是 Places 金鑰壞掉。
+
+App 行為（`lib/services/location_service.dart`）：
+
+1. 先 `getCurrentPosition`（短逾時）
+2. 失敗則 `getLastKnownPosition`
+3. Android 再試 `forceLocationManager: true`
+4. **僅 `kDebugMode`**：仍失敗則使用台北車站附近測試座標（`25.0478, 121.5170`），讓真 Places 可繼續驗
+5. **Release／真機**：不會走第 4 步；逾時會顯示定位失敗說明＋「開啟定位」
+
+手動餵模擬器座標（較可靠）：
+
+1. 模擬器右側 `…`（Extended controls）→ **Location**
+2. 選點或輸入緯經度 → **Send**
+3. App 內點「開啟定位」或下拉重新整理
+
+`adb emu geo fix <lng> <lat>` 在部分映像不一定會進到 Geolocator。
+
+## 5. 畫面判讀
+
+| 現象 | 意義 |
+|------|------|
+| 「店家資料來自 Google」 | 有金鑰且 Places 回傳非 Demo |
+| 「定位失敗」＋仍有 Google 歸屬 | 定位沒拿到，但 Places 可能用預設錨點查真店 |
+| 示範橫幅、無 Google 歸屬 | 無金鑰或 API 失敗降級 Demo |
+| 理由裡出現「約 N 公里」但橫幅說定位失敗 | 距離可能相對預設錨點；Debug 後備開啟後橫幅應消失 |
+
+## 6. 相關檔案
+
+- `lib/services/location_service.dart` — 定位與 Debug 後備
+- `docs/places-setup.md` — Cloud Console 金鑰
+- `android/` — AGP 8.9.1、Gradle 8.12（配合 Flutter 3.35）
