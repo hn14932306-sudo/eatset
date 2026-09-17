@@ -51,6 +51,9 @@ class DecisionEngine {
   static const int dailyRerollLimit = 3;
 
   /// 過濾關閉、過遠、過低評、已排除。
+  ///
+  /// 真實 Places 路徑：排除 `openNow == false`，並套用 [minRating]／[minReviews]；
+  /// 與 PlacesService 不加 `opennow` 查詢參數的策略一致（營業中偏好在此層完成）。
   List<Place> filterCandidates(
     List<Place> places,
     UserPrefs prefs, {

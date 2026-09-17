@@ -40,15 +40,19 @@ flutter run -d chrome   # Web 亦可，定位可能受限
 
 ## 使用 Google Places API
 
+完整步驟（啟用 API、限制金鑰、驗證歸因）：見 **[docs/places-setup.md](docs/places-setup.md)**。
+
 1. 在 [Google Cloud Console](https://console.cloud.google.com/) 啟用 **Places API**（Nearby Search）。
-2. 建立 API 金鑰，並依需求限制（應用程式／IP）。
+2. 建立 API 金鑰，並依平台限制（Android `com.eatset.eatset`／iOS `com.eatset.eatset`／Web referrer）。
 3. **擇一**提供金鑰（**勿提交真實金鑰**）：
 
-### A. 執行時 dart-define（建議）
+### A. 執行時 dart-define（**建議／優先**，不必改任何 source 檔）
 
 ```bash
 flutter run --dart-define=GOOGLE_PLACES_API_KEY=你的金鑰
 ```
+
+成功時首頁底部會出現細字「店家資料來自 Google」；Demo 模式不會顯示。
 
 ### B. 本機設定檔（gitignored）
 
@@ -60,8 +64,14 @@ cp lib/config/api_keys.example.dart lib/config/api_keys.local.dart
 #   改成 export 'api_keys.local.dart';
 ```
 
-未改 `api_keys_source.dart` 時會繼續走 stub（空金鑰 → Demo），避免「檔案存在卻沒生效」的 silent no-op。
+未改 `api_keys_source.dart` 時會繼續走 stub（空金鑰 → Demo），避免「檔案存在卻沒生效」的 silent no-op。  
+協作時請優先用 dart-define，避免把 local export 推上共用分支。
+
 亦見專案根目錄 `.env.example`（文件用途；本 MVP 以 dart-define／local dart 為準）。
+
+### 決策篩選（已內建）
+
+Nearby 回傳後由 `DecisionEngine` 偏好營業中、較高評分店家（見 `docs/places-setup.md`）。
 
 ## 測試與分析
 
@@ -70,7 +80,7 @@ flutter analyze
 flutter test
 ```
 
-單元測試涵蓋決策評分、過濾、均衡提醒與餐段時段。
+單元測試涵蓋決策評分、過濾、均衡提醒、餐段時段，以及 Places（mock HTTP：OK／REQUEST_DENIED／無金鑰）。
 
 ## Android 注意事項
 
@@ -96,8 +106,11 @@ lib/
   providers/       # AppState（provider）
   screens/         # Cold start、Home、History
   widgets/         # Mood chips、Decision card
+docs/
+  places-setup.md  # 科林本機接真 Places 的清單
 test/
   decision_engine_test.dart
+  places_service_test.dart
 ```
 
 ## 刻意不做（Out of scope）

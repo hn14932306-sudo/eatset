@@ -184,6 +184,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
               ],
             ),
+            // Google Places 政策：顯示真實 Places 資料時須標示來源；Demo 不聲稱來自 Google。
+            if (!state.isDemo) ...[
+              const SizedBox(height: 28),
+              Text(
+                '店家資料來自 Google',
+                key: const Key('places_attribution'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.65),
+                    ),
+              ),
+            ],
           ],
         ),
       ),

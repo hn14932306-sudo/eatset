@@ -8,16 +8,32 @@ import 'demo_places.dart';
 import 'location_service.dart';
 
 /// Google Places Nearby Search（REST）+ Demo 後備。
+///
+/// **偏好「較高評分／營業中」**：本服務回傳 Nearby 原始結果；
+/// [DecisionEngine.filterCandidates] 已排除 `openNow == false`，
+/// 並對真實店家套用最低評分／評論數；[DecisionEngine.scorePlace] 再偏高評分。
+/// 因此不在此加 `opennow` 查詢參數，避免營業中過少時整批 ZERO_RESULTS 掉進 Demo。
 class PlacesService {
-  PlacesService({http.Client? client}) : _client = client ?? http.Client();
+  PlacesService({
+    http.Client? client,
+    String? apiKey,
+  })  : _client = client ?? http.Client(),
+        _apiKeyOverride = apiKey;
 
   final http.Client _client;
+
+  /// 測試用覆寫；正式路徑為 null → 走 [googlePlacesApiKey]。
+  final String? _apiKeyOverride;
 
   static const _nearbyUrl =
       'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 
   /// 最大搜尋半徑（公尺）。
   static const int defaultRadiusMeters = 1200;
+
+  String get _effectiveKey => _apiKeyOverride ?? googlePlacesApiKey;
+
+  bool get _hasKey => _effectiveKey.isNotEmpty;
 
   /// 取得附近餐飲；無金鑰或 API 失敗時回傳 Demo。
   Future<PlacesResult> fetchNearby({
@@ -28,7 +44,7 @@ class PlacesService {
     final lng = location?.lng ?? DemoPlaces.anchorLng;
     final usedDeviceLocation = location?.fromDevice ?? false;
 
-    if (!hasPlacesApiKey) {
+    if (!_hasKey) {
       return PlacesResult(
         places: DemoPlaces.seededNear(userLat: lat, userLng: lng),
         isDemo: true,
@@ -45,11 +61,16 @@ class PlacesService {
         'radius': '$radiusMeters',
         'type': 'restaurant',
         'language': 'zh-TW',
-        'key': googlePlacesApiKey,
+        'key': _effectiveKey,
       });
       final res = await _client.get(uri).timeout(const Duration(seconds: 12));
       if (res.statusCode != 200) {
-        return _demoFallback(lat, lng, usedDeviceLocation, 'Places API 回應異常');
+        return _demoFallback(
+          lat,
+          lng,
+          usedDeviceLocation,
+          'Places API HTTP ${res.statusCode}，已改用 Demo',
+        );
       }
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final status = body['status'] as String? ?? '';
@@ -58,7 +79,7 @@ class PlacesService {
           lat,
           lng,
           usedDeviceLocation,
-          'Places API：$status，已改用 Demo',
+          _noteForApiStatus(status),
         );
       }
       final results = (body['results'] as List?) ?? const [];
@@ -110,6 +131,24 @@ class PlacesService {
         usedDeviceLocation,
         '網路或 API 失敗，已改用 Demo',
       );
+    }
+  }
+
+  /// 將 Places status 轉成清楚的繁中說明（含常見錯誤碼）。
+  static String _noteForApiStatus(String status) {
+    switch (status) {
+      case 'REQUEST_DENIED':
+        return 'Places API：REQUEST_DENIED（金鑰無效、未啟用 Places API，或限制不符），已改用 Demo';
+      case 'OVER_QUERY_LIMIT':
+        return 'Places API：OVER_QUERY_LIMIT（配額用盡），已改用 Demo';
+      case 'INVALID_REQUEST':
+        return 'Places API：INVALID_REQUEST（參數錯誤），已改用 Demo';
+      case 'UNKNOWN_ERROR':
+        return 'Places API：UNKNOWN_ERROR（伺服器暫時錯誤），已改用 Demo';
+      case 'NOT_FOUND':
+        return 'Places API：NOT_FOUND，已改用 Demo';
+      default:
+        return 'Places API：$status，已改用 Demo';
     }
   }
 
