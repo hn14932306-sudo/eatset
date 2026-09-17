@@ -11,6 +11,7 @@ class UserPrefs {
     this.coldStartDone = false,
     this.mood = Mood.safe,
     this.excludedPlaceIds = const {},
+    this.excludedPlaceNames = const {},
     this.excludedCategories = const {},
   });
 
@@ -27,7 +28,13 @@ class UserPrefs {
   final bool coldStartDone;
   final Mood mood;
   final Set<String> excludedPlaceIds;
+  /// placeId → 顯示名稱（避免 UI 只顯示 raw id）
+  final Map<String, String> excludedPlaceNames;
   final Set<String> excludedCategories;
+
+  /// 取得排除店家的顯示名稱。
+  String excludedPlaceLabel(String id) =>
+      excludedPlaceNames[id] ?? '已排除的店家';
 
   UserPrefs copyWith({
     bool? prefersNoodles,
@@ -38,6 +45,7 @@ class UserPrefs {
     bool? coldStartDone,
     Mood? mood,
     Set<String>? excludedPlaceIds,
+    Map<String, String>? excludedPlaceNames,
     Set<String>? excludedCategories,
     bool clearNoodles = false,
     bool clearLight = false,
@@ -52,6 +60,7 @@ class UserPrefs {
       coldStartDone: coldStartDone ?? this.coldStartDone,
       mood: mood ?? this.mood,
       excludedPlaceIds: excludedPlaceIds ?? this.excludedPlaceIds,
+      excludedPlaceNames: excludedPlaceNames ?? this.excludedPlaceNames,
       excludedCategories: excludedCategories ?? this.excludedCategories,
     );
   }
@@ -65,6 +74,7 @@ class UserPrefs {
         'coldStartDone': coldStartDone,
         'mood': mood.name,
         'excludedPlaceIds': excludedPlaceIds.toList(),
+        'excludedPlaceNames': excludedPlaceNames,
         'excludedCategories': excludedCategories.toList(),
       };
 
@@ -77,6 +87,19 @@ class UserPrefs {
         orElse: () => Mood.safe,
       );
     }
+    final ids =
+        (json['excludedPlaceIds'] as List?)?.cast<String>().toSet() ?? {};
+    final namesRaw = json['excludedPlaceNames'];
+    final names = <String, String>{};
+    if (namesRaw is Map) {
+      namesRaw.forEach((k, v) {
+        if (k is String && v is String) names[k] = v;
+      });
+    }
+    // 舊資料只有 id：保留 id，顯示時再盡力解析名稱
+    for (final id in ids) {
+      names.putIfAbsent(id, () => '');
+    }
     return UserPrefs(
       prefersNoodles: json['prefersNoodles'] as bool?,
       prefersLight: json['prefersLight'] as bool?,
@@ -85,8 +108,8 @@ class UserPrefs {
       prefersQuick: json['prefersQuick'] as bool?,
       coldStartDone: json['coldStartDone'] as bool? ?? false,
       mood: mood,
-      excludedPlaceIds:
-          (json['excludedPlaceIds'] as List?)?.cast<String>().toSet() ?? {},
+      excludedPlaceIds: ids,
+      excludedPlaceNames: names,
       excludedCategories:
           (json['excludedCategories'] as List?)?.cast<String>().toSet() ?? {},
     );

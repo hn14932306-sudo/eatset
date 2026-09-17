@@ -53,6 +53,36 @@ class _RootGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
 
+    if (state.status == AppLoadStatus.error) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '吃定了',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  state.errorMessage ?? '載入失敗，請再試一次。',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => context.read<AppState>().bootstrap(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('重試'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (state.status != AppLoadStatus.ready) {
       return const Scaffold(
         body: Center(

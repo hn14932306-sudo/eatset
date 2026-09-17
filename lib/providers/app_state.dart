@@ -35,6 +35,8 @@ class AppState extends ChangeNotifier {
   List<HistoryEntry> history = const [];
   Decision? current;
   String? statusNote;
+  /// bootstrap／refresh 失敗時給 UI 的可恢復訊息
+  String? errorMessage;
   bool isDemo = true;
   bool locationOk = false;
   int rerollsUsedToday = 0;
@@ -45,29 +47,40 @@ class AppState extends ChangeNotifier {
       (DecisionEngine.dailyRerollLimit - rerollsUsedToday)
           .clamp(0, DecisionEngine.dailyRerollLimit);
 
+  bool get hasExclusions =>
+      prefs.excludedPlaceIds.isNotEmpty || prefs.excludedCategories.isNotEmpty;
+
   Future<void> bootstrap() async {
     status = AppLoadStatus.loading;
+    errorMessage = null;
     notifyListeners();
 
-    prefs = await _storage.loadPrefs();
-    history = await _storage.loadHistory();
-    rerollsUsedToday = await _storage.loadRerollCountToday();
-    mealSlot = MealSlot.fromDateTime(DateTime.now());
+    try {
+      prefs = await _storage.loadPrefs();
+      history = await _storage.loadHistory();
+      rerollsUsedToday = await _storage.loadRerollCountToday();
+      mealSlot = MealSlot.fromDateTime(DateTime.now());
 
-    final loc = await _location.getCurrentLocation();
-    locationOk = loc != null;
+      final loc = await _location.getCurrentLocation();
+      locationOk = loc != null;
 
-    final result = await _places.fetchNearby(location: loc);
-    nearby = result.places;
-    isDemo = result.isDemo;
-    statusNote = result.noteZh;
+      final result = await _places.fetchNearby(location: loc);
+      nearby = result.places;
+      isDemo = result.isDemo;
+      statusNote = result.noteZh;
 
-    if (prefs.coldStartDone) {
-      await _pickDecision(initial: true);
+      if (prefs.coldStartDone) {
+        await _pickDecision(initial: true);
+      }
+
+      status = AppLoadStatus.ready;
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('bootstrap failed: $e\n$st');
+      errorMessage = '啟動時發生問題，請再試一次。';
+      status = AppLoadStatus.error;
+      notifyListeners();
     }
-
-    status = AppLoadStatus.ready;
-    notifyListeners();
   }
 
   Future<void> completeColdStart(Map<String, bool> answers) async {
@@ -94,14 +107,26 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 重抽：若沒有真正換到另一家，不扣每日次數。
   Future<void> reroll() async {
     if (rerollsLeft <= 0) return;
-    if (current != null) {
-      _skippedThisSession.add(current!.place.id);
+    final previousId = current?.place.id;
+    if (previousId != null) {
+      _skippedThisSession.add(previousId);
+    }
+    await _pickDecision();
+    final newId = current?.place.id;
+    if (newId == null || newId == previousId) {
+      // 候選耗盡後清 session skip 仍同一家／沒有選項 → 不扣次數
+      if (newId == previousId && previousId != null) {
+        final prefix = statusNote == null ? '' : '$statusNote · ';
+        statusNote = '$prefix目前沒有其他可換選項';
+      }
+      notifyListeners();
+      return;
     }
     rerollsUsedToday += 1;
     await _storage.saveRerollCountToday(rerollsUsedToday);
-    await _pickDecision();
     notifyListeners();
   }
 
@@ -128,7 +153,8 @@ class AppState extends ChangeNotifier {
     final d = current;
     if (d == null) return;
     final ids = {...prefs.excludedPlaceIds, d.place.id};
-    prefs = prefs.copyWith(excludedPlaceIds: ids);
+    final names = {...prefs.excludedPlaceNames, d.place.id: d.place.name};
+    prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
     await _storage.savePrefs(prefs);
     _skippedThisSession.add(d.place.id);
     await _pickDecision();
@@ -143,19 +169,99 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 從目前店家推斷「不要這類」的單一類別（無多選清單）。
+  String? inferCategoryForCurrent() {
+    final place = current?.place;
+    if (place == null) return null;
+    return inferCategoryForPlace(place);
+  }
+
+  /// 推斷店家代表類別（優先 cuisineTags，再依名稱關鍵字）。
+  static String? inferCategoryForPlace(Place place) {
+    if (place.cuisineTags.isNotEmpty) {
+      // 優先較具體的料理標籤，避開「內用／外帶／快速」等體驗標
+      const soft = {'內用', '外帶', '快速', '清淡', '重口味'};
+      for (final t in place.cuisineTags) {
+        if (!soft.contains(t)) return t;
+      }
+      return place.cuisineTags.first;
+    }
+    final name = place.name;
+    if (name.contains('火鍋')) return '火鍋';
+    if (name.contains('麵') || name.contains('面')) return '麵';
+    if (name.contains('飯') || name.contains('便當') || name.contains('壽司')) {
+      return '飯';
+    }
+    if (name.contains('早') || name.contains('蛋餅') || name.contains('粥')) {
+      return '早餐';
+    }
+    if (name.contains('咖啡')) return '咖啡';
+    return null;
+  }
+
+  Future<void> removeExcludedPlace(String placeId) async {
+    final ids = {...prefs.excludedPlaceIds}..remove(placeId);
+    final names = {...prefs.excludedPlaceNames}..remove(placeId);
+    prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
+    await _storage.savePrefs(prefs);
+    await _pickDecision(initial: true);
+    notifyListeners();
+  }
+
+  Future<void> removeExcludedCategory(String category) async {
+    final cats = {...prefs.excludedCategories}..remove(category);
+    prefs = prefs.copyWith(excludedCategories: cats);
+    await _storage.savePrefs(prefs);
+    await _pickDecision(initial: true);
+    notifyListeners();
+  }
+
+  Future<void> clearAllExclusions() async {
+    prefs = prefs.copyWith(
+      excludedPlaceIds: {},
+      excludedPlaceNames: {},
+      excludedCategories: {},
+    );
+    await _storage.savePrefs(prefs);
+    _skippedThisSession.clear();
+    await _pickDecision(initial: true);
+    notifyListeners();
+  }
+
+  /// 解析排除店家顯示名稱（prefs 名稱 → 歷史 → nearby）。
+  String labelForExcludedPlace(String id) {
+    final stored = prefs.excludedPlaceNames[id];
+    if (stored != null && stored.isNotEmpty) return stored;
+    for (final h in history) {
+      if (h.placeId == id) return h.placeName;
+    }
+    for (final p in nearby) {
+      if (p.id == id) return p.name;
+    }
+    return '已排除的店家';
+  }
+
   Future<void> refreshPlaces() async {
     status = AppLoadStatus.loading;
+    errorMessage = null;
     notifyListeners();
-    final loc = await _location.getCurrentLocation();
-    locationOk = loc != null;
-    final result = await _places.fetchNearby(location: loc);
-    nearby = result.places;
-    isDemo = result.isDemo;
-    statusNote = result.noteZh;
-    mealSlot = MealSlot.fromDateTime(DateTime.now());
-    await _pickDecision(initial: true);
-    status = AppLoadStatus.ready;
-    notifyListeners();
+    try {
+      final loc = await _location.getCurrentLocation();
+      locationOk = loc != null;
+      final result = await _places.fetchNearby(location: loc);
+      nearby = result.places;
+      isDemo = result.isDemo;
+      statusNote = result.noteZh;
+      mealSlot = MealSlot.fromDateTime(DateTime.now());
+      await _pickDecision(initial: true);
+      status = AppLoadStatus.ready;
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('refreshPlaces failed: $e\n$st');
+      errorMessage = '重新整理失敗，請再試一次。';
+      status = AppLoadStatus.error;
+      notifyListeners();
+    }
   }
 
   Future<void> _pickDecision({bool initial = false}) async {

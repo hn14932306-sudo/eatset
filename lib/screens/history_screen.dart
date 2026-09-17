@@ -8,34 +8,91 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final history = context.watch<AppState>().history;
-    final prefs = context.watch<AppState>().prefs;
+    final state = context.watch<AppState>();
+    final history = state.history;
+    final prefs = state.prefs;
+    final hasExclusions = state.hasExclusions;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('歷史與排除')),
+      appBar: AppBar(
+        title: const Text('歷史與排除'),
+        actions: [
+          if (hasExclusions)
+            TextButton(
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('清除全部排除？'),
+                    content: const Text('會取消所有「不要這家／不要這類」設定。'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('取消'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('清除'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true && context.mounted) {
+                  await context.read<AppState>().clearAllExclusions();
+                }
+              },
+              child: const Text('全部清除'),
+            ),
+        ],
+      ),
       body: ListView(
         children: [
-          if (prefs.excludedPlaceIds.isNotEmpty ||
-              prefs.excludedCategories.isNotEmpty)
+          if (hasExclusions)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('已排除', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(
+                    '點芯片上的 × 可取消單一排除',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: [
                       ...prefs.excludedCategories.map(
-                        (c) => Chip(label: Text('類別：$c')),
+                        (c) => InputChip(
+                          label: Text('類別：$c'),
+                          onDeleted: () => context
+                              .read<AppState>()
+                              .removeExcludedCategory(c),
+                          deleteButtonTooltipMessage: '取消排除',
+                        ),
                       ),
-                      ...prefs.excludedPlaceIds.take(10).map(
-                            (id) => Chip(label: Text('店：$id')),
-                          ),
+                      ...prefs.excludedPlaceIds.map(
+                        (id) => InputChip(
+                          label: Text(state.labelForExcludedPlace(id)),
+                          onDeleted: () =>
+                              context.read<AppState>().removeExcludedPlace(id),
+                          deleteButtonTooltipMessage: '取消排除',
+                        ),
+                      ),
                     ],
                   ),
                 ],
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('目前沒有排除項目'),
+                subtitle: Text('在首頁「更多」可排除店家或類別'),
               ),
             ),
           Padding(

@@ -7,23 +7,33 @@ class MoodChips extends StatelessWidget {
     super.key,
     required this.value,
     required this.onChanged,
+    this.compact = false,
   });
 
   final Mood value;
   final ValueChanged<Mood> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: compact ? 6 : 8,
+      runSpacing: compact ? 6 : 8,
       children: Mood.values.map((m) {
         final selected = m == value;
         return FilterChip(
-          label: Text(m.labelZh),
+          label: Text(
+            m.labelZh,
+            style: compact ? Theme.of(context).textTheme.labelMedium : null,
+          ),
           selected: selected,
           onSelected: (_) => onChanged(m),
           showCheckmark: false,
+          visualDensity:
+              compact ? VisualDensity.compact : VisualDensity.standard,
+          materialTapTargetSize: compact
+              ? MaterialTapTargetSize.shrinkWrap
+              : MaterialTapTargetSize.padded,
         );
       }).toList(),
     );

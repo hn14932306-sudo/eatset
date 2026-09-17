@@ -35,12 +35,7 @@ class HomeScreen extends StatelessWidget {
         title: const Text('吃定了'),
         actions: [
           IconButton(
-            tooltip: '重新整理',
-            onPressed: () => context.read<AppState>().refreshPlaces(),
-            icon: const Icon(Icons.refresh),
-          ),
-          IconButton(
-            tooltip: '歷史紀錄',
+            tooltip: '歷史與排除',
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const HistoryScreen()),
@@ -85,41 +80,13 @@ class HomeScreen extends StatelessWidget {
                     ),
               ),
             ],
-            const SizedBox(height: 16),
-            Text('現在心情', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            MoodChips(
-              value: state.prefs.mood,
-              onChanged: (m) => context.read<AppState>().setMood(m),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text('這一餐就吃', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (state.current != null)
               DecisionCard(decision: state.current!)
             else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const Text('暫時找不到合適選項'),
-                      const SizedBox(height: 8),
-                      Text(
-                        '可取消部分排除，或稍後再試。App 不會停在空白頁。',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: () =>
-                            context.read<AppState>().refreshPlaces(),
-                        child: const Text('再試一次'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _EmptyDecisionCard(state: state),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: state.current == null
@@ -146,45 +113,26 @@ class HomeScreen extends StatelessWidget {
                 minimumSize: const Size.fromHeight(48),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: state.current == null
-                        ? null
-                        : () => context.read<AppState>().excludeCurrentPlace(),
-                    child: const Text('不要這家'),
-                  ),
-                ),
-                Expanded(
-                  child: TextButton(
-                    onPressed: state.current == null
-                        ? null
-                        : () => _showExcludeCategory(context, state),
-                    child: const Text('不要這類'),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: state.current == null
+                    ? null
+                    : () => _showMoreActions(context, state),
+                icon: const Icon(Icons.more_horiz, size: 20),
+                label: const Text('更多'),
+              ),
             ),
+            const SizedBox(height: 8),
+            const _MoodTuneDisclosure(),
           ],
         ),
       ),
     );
   }
 
-  void _showExcludeCategory(BuildContext context, AppState state) {
-    final place = state.current?.place;
-    if (place == null) return;
-    final options = <String>{
-      ...place.cuisineTags,
-      if (place.name.contains('麵') || place.name.contains('面')) '麵',
-      if (place.name.contains('飯') || place.name.contains('便當')) '飯',
-      if (place.name.contains('火鍋')) '火鍋',
-    }.toList();
-    if (options.isEmpty) {
-      options.addAll(['重口味', '清淡']);
-    }
+  void _showMoreActions(BuildContext context, AppState state) {
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) {
@@ -192,20 +140,169 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(title: Text('排除哪一類？')),
-              ...options.map(
-                (c) => ListTile(
-                  title: Text(c),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    context.read<AppState>().excludeCategory(c);
-                  },
-                ),
+              ListTile(
+                leading: const Icon(Icons.block_outlined),
+                title: const Text('不要這家'),
+                subtitle: const Text('之後不再推薦這一家'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<AppState>().excludeCurrentPlace();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.category_outlined),
+                title: const Text('不要這類'),
+                subtitle: const Text('排除系統推斷的這一類'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmExcludeCategory(context);
+                },
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _confirmExcludeCategory(BuildContext context) {
+    final state = context.read<AppState>();
+    final category = state.inferCategoryForCurrent();
+    if (category == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('無法判斷這家的類別，請改用「不要這家」。')),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('不要這類？'),
+          content: Text('要排除「$category」這類餐廳嗎？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('否'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.read<AppState>().excludeCategory(category);
+              },
+              child: const Text('是'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _EmptyDecisionCard extends StatelessWidget {
+  const _EmptyDecisionCard({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Text('暫時找不到合適選項'),
+            const SizedBox(height: 8),
+            Text(
+              state.hasExclusions
+                  ? '可取消部分排除，或稍後再試。'
+                  : '稍後再試，或下拉重新整理。App 不會停在空白頁。',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            if (state.hasExclusions) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  ...state.prefs.excludedCategories.map(
+                    (c) => InputChip(
+                      label: Text('類別：$c'),
+                      onDeleted: () =>
+                          context.read<AppState>().removeExcludedCategory(c),
+                    ),
+                  ),
+                  ...state.prefs.excludedPlaceIds.map(
+                    (id) => InputChip(
+                      label: Text(state.labelForExcludedPlace(id)),
+                      onDeleted: () =>
+                          context.read<AppState>().removeExcludedPlace(id),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => context.read<AppState>().clearAllExclusions(),
+                child: const Text('清除全部排除'),
+              ),
+              const SizedBox(height: 4),
+            ],
+            FilledButton(
+              onPressed: () => context.read<AppState>().refreshPlaces(),
+              child: const Text('再試一次'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                );
+              },
+              child: const Text('管理排除項目'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 心情微調：預設收合，不與主 CTA 搶視覺層級。
+class _MoodTuneDisclosure extends StatelessWidget {
+  const _MoodTuneDisclosure();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final scheme = Theme.of(context).colorScheme;
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: Text(
+          '微調心情',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        subtitle: Text(
+          state.prefs.mood.labelZh,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.outline,
+              ),
+        ),
+        children: [
+          MoodChips(
+            value: state.prefs.mood,
+            onChanged: (m) => context.read<AppState>().setMood(m),
+            compact: true,
+          ),
+        ],
+      ),
     );
   }
 }

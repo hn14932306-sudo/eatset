@@ -55,9 +55,12 @@ flutter run --dart-define=GOOGLE_PLACES_API_KEY=你的金鑰
 ```bash
 cp lib/config/api_keys.example.dart lib/config/api_keys.local.dart
 # 編輯 api_keys.local.dart 填入金鑰
-# 並在 lib/config/api_keys.dart 取消對 local 的 import 註解
+# 啟用：編輯 lib/config/api_keys_source.dart
+#   把 export 'api_keys_stub.dart';
+#   改成 export 'api_keys.local.dart';
 ```
 
+未改 `api_keys_source.dart` 時會繼續走 stub（空金鑰 → Demo），避免「檔案存在卻沒生效」的 silent no-op。
 亦見專案根目錄 `.env.example`（文件用途；本 MVP 以 dart-define／local dart 為準）。
 
 ## 測試與分析
@@ -87,7 +90,7 @@ flutter test
 ```
 lib/
   main.dart
-  config/          # API 金鑰（example + 讀取邏輯）
+  config/          # API 金鑰（stub / source 切換 + example／local）
   models/          # Place、MealSlot、Mood、UserPrefs
   services/        # 定位、Places、Demo、決策引擎、儲存、Maps
   providers/       # AppState（provider）
