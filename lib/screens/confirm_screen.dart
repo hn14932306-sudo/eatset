@@ -46,9 +46,14 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
     if (!mounted) return;
     setState(() {
       _opening = false;
-      if (ok) {
+      if (ok && !_showCopyLink) {
         _mapsFailed = false;
         _failureMessage = null;
+      } else if (ok && _showCopyLink) {
+        // Web: url_launcher often returns true even when the popup is blocked.
+        _mapsFailed = false;
+        _failureMessage =
+            '若沒看到地圖分頁，請允許彈出式視窗，或用下方複製連結';
       } else {
         _mapsFailed = true;
         _failureMessage = _showCopyLink
@@ -121,7 +126,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                       ),
                 ),
               ],
-              if (_mapsFailed && _failureMessage != null) ...[
+              if (_failureMessage != null) ...[
                 const SizedBox(height: 20),
                 Material(
                   color: scheme.errorContainer,
@@ -158,7 +163,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                   minimumSize: const Size.fromHeight(52),
                 ),
               ),
-              if (_mapsFailed && _showCopyLink) ...[
+              if (_showCopyLink) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _copyMapsLink,
