@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_state.dart';
+import '../widgets/excluded_chips.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -60,10 +61,8 @@ class HistoryScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
+                  ExcludedChipsWrap(
+                    chips: [
                       ...prefs.excludedCategories.map(
                         (c) => InputChip(
                           label: Text('類別：$c'),

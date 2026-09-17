@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../services/decision_engine.dart';
 import '../widgets/decision_card.dart';
+import '../widgets/excluded_chips.dart';
 import '../widgets/mood_chips.dart';
 import 'confirm_screen.dart';
 import 'history_screen.dart';
@@ -455,11 +456,8 @@ class _EmptyDecisionCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (state.hasExclusions) ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
+              ExcludedChipsWrap(
+                chips: [
                   ...state.prefs.excludedCategories.map(
                     (c) => InputChip(
                       label: Text('類別：$c'),
