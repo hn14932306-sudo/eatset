@@ -287,7 +287,30 @@ class AppState extends ChangeNotifier {
     prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
     await _storage.savePrefs(prefs);
     _skippedThisSession.remove(placeId);
-    await _pickDecision(initial: true);
+    // 復原必須回到同一家，不能只重新抽（否則驗收看不到卡片回復）。
+    Place? restored;
+    for (final p in nearby) {
+      if (p.id == placeId) {
+        restored = p;
+        break;
+      }
+    }
+    if (restored != null) {
+      current = Decision(
+        place: restored,
+        reasonZh: '已復原你剛才排除的店',
+        score: 1,
+        mealSlot: mealSlot.labelZh,
+      );
+      // 清掉「無候選」備註尾巴若有
+      if (statusNote != null && statusNote!.contains('目前沒有合適選項')) {
+        statusNote = isDemo
+            ? '示範模式 · 非你附近的真實店家'
+            : (locationOk ? null : statusNote);
+      }
+    } else {
+      await _pickDecision(initial: true);
+    }
     notifyListeners();
   }
 
