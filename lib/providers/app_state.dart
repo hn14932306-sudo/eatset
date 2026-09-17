@@ -56,6 +56,12 @@ class AppState extends ChangeNotifier {
   String? errorMessage;
   bool isDemo = true;
   bool locationOk = false;
+  /// 系統定位服務關閉。
+  bool locationServiceDisabled = false;
+  /// 定位權限被拒（可再請求）。
+  bool locationDenied = false;
+  /// 定位權限永久拒絕（需開設定）。
+  bool locationDeniedForever = false;
   int rerollsUsedToday = 0;
   final Set<String> _skippedThisSession = {};
   MealSlot mealSlot = MealSlot.fromDateTime(DateTime.now());
@@ -73,6 +79,9 @@ class AppState extends ChangeNotifier {
 
   /// 冷啟動結束後首頁提示「想穩妥」（toast 用，顯示後清掉）。
   bool showDefaultMoodHint = false;
+
+  /// 心情變更後重算提示（toast 用，顯示後清掉）。
+  bool showMoodReselectedHint = false;
 
   int get rerollsLeft =>
       (DecisionEngine.dailyRerollLimit - rerollsUsedToday)
@@ -121,6 +130,35 @@ class AppState extends ChangeNotifier {
     showDefaultMoodHint = false;
   }
 
+  void consumeMoodReselectedHint() {
+    if (!showMoodReselectedHint) return;
+    showMoodReselectedHint = false;
+  }
+
+  void _applyLocationResult(LocationResult result) {
+    locationOk = result.ok;
+    locationServiceDisabled =
+        result.failure == LocationFailureReason.serviceDisabled;
+    locationDenied = result.failure == LocationFailureReason.denied;
+    locationDeniedForever =
+        result.failure == LocationFailureReason.deniedForever;
+  }
+
+  /// 橫幅用：依最後定位結果給誠實短說明。
+  String? get locationHelpSubtitle {
+    if (locationOk) return null;
+    if (locationServiceDisabled) {
+      return '裝置定位服務已關閉；請開啟後再試';
+    }
+    if (locationDeniedForever) {
+      return '定位權限被永久拒絕；請到系統設定開啟';
+    }
+    if (locationDenied) {
+      return '尚未允許定位權限；點下方可再請求';
+    }
+    return isDemo ? '目前先用示範店家 · 何時開定位都可以' : '定位失敗，請再試一次';
+  }
+
   Future<void> bootstrap() async {
     status = AppLoadStatus.loading;
     errorMessage = null;
@@ -133,8 +171,9 @@ class AppState extends ChangeNotifier {
       mealSlot = MealSlot.fromDateTime(DateTime.now());
       _forceRedecide = false;
 
-      final loc = await _location.getCurrentLocation();
-      locationOk = loc != null;
+      final locResult = await _location.getCurrentLocation();
+      _applyLocationResult(locResult);
+      final loc = locResult.location;
 
       final result = await _places.fetchNearby(location: loc);
       nearby = result.places;
@@ -184,11 +223,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setMood(Mood mood) async {
+  /// 變更心情並重算；不扣每日換次。相同心情則 no-op。
+  /// 成功變更時設 [showMoodReselectedHint] 供 UI toast。
+  Future<bool> setMood(Mood mood) async {
+    if (prefs.mood == mood) return false;
     prefs = prefs.copyWith(mood: mood);
     await _storage.savePrefs(prefs);
     await _pickDecision(initial: true);
+    showMoodReselectedHint = true;
     notifyListeners();
+    return true;
   }
 
   /// 重抽：若沒有真正換到另一家，不扣每日次數。
@@ -391,8 +435,9 @@ class AppState extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      final loc = await _location.getCurrentLocation();
-      locationOk = loc != null;
+      final locResult = await _location.getCurrentLocation();
+      _applyLocationResult(locResult);
+      final loc = locResult.location;
       final result = await _places.fetchNearby(location: loc);
       nearby = result.places;
       isDemo = result.isDemo;
@@ -404,6 +449,45 @@ class AppState extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('refreshPlaces failed: $e\n$st');
       errorMessage = '重新整理失敗，請再試一次。';
+      status = AppLoadStatus.error;
+      notifyListeners();
+    }
+  }
+
+  /// 「開啟定位」CTA：再請求權限；永久拒絕／服務關閉則開設定，再刷新。
+  Future<void> enableLocation() async {
+    status = AppLoadStatus.loading;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      var locResult = await _location.getCurrentLocation();
+      _applyLocationResult(locResult);
+
+      if (!locResult.ok) {
+        if (locResult.failure == LocationFailureReason.serviceDisabled) {
+          await _location.openLocationSettingsSafe();
+          locResult = await _location.getCurrentLocation();
+          _applyLocationResult(locResult);
+        } else if (locResult.failure ==
+            LocationFailureReason.deniedForever) {
+          await _location.openAppSettingsSafe();
+          locResult = await _location.getCurrentLocation();
+          _applyLocationResult(locResult);
+        }
+      }
+
+      final loc = locResult.location;
+      final result = await _places.fetchNearby(location: loc);
+      nearby = result.places;
+      isDemo = result.isDemo;
+      statusNote = result.noteZh;
+      mealSlot = MealSlot.fromDateTime(DateTime.now());
+      await _pickDecision(initial: true);
+      status = AppLoadStatus.ready;
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('enableLocation failed: $e\n$st');
+      errorMessage = '開啟定位失敗，請再試一次。';
       status = AppLoadStatus.error;
       notifyListeners();
     }

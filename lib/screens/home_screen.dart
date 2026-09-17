@@ -405,7 +405,7 @@ class _StatusBanner extends StatelessWidget {
     if (!state.locationOk) {
       bg = state.isDemo ? scheme.tertiaryContainer : scheme.errorContainer;
       title = '需要定位才能找附近餐廳';
-      subtitle = state.isDemo ? '目前先用示範店家 · 何時開定位都可以' : null;
+      subtitle = state.locationHelpSubtitle;
     } else if (state.isDemo) {
       bg = scheme.tertiaryContainer;
       title = '示範模式 · 非你附近的真實店家';
@@ -444,7 +444,8 @@ class _StatusBanner extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: FilledButton.tonal(
-                  onPressed: () => context.read<AppState>().refreshPlaces(),
+                  onPressed: () =>
+                      context.read<AppState>().enableLocation(),
                   child: const Text('開啟定位'),
                 ),
               ),
@@ -561,7 +562,20 @@ class _MoodTuneDisclosure extends StatelessWidget {
         children: [
           MoodChips(
             value: state.prefs.mood,
-            onChanged: (m) => context.read<AppState>().setMood(m),
+            onChanged: (m) async {
+              final app = context.read<AppState>();
+              final changed = await app.setMood(m);
+              if (!context.mounted || !changed) return;
+              if (app.showMoodReselectedHint) {
+                app.consumeMoodReselectedHint();
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('已依心情重新決定'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
             compact: true,
           ),
         ],
