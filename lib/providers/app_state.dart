@@ -11,6 +11,24 @@ import '../services/storage_service.dart';
 
 enum AppLoadStatus { idle, loading, ready, error }
 
+/// 同一本地日曆日（年／月／日）。
+bool isSameLocalDay(DateTime a, DateTime b) {
+  final la = a.toLocal();
+  final lb = b.toLocal();
+  return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+}
+
+/// 當日最新一筆「就吃這個」紀錄（history 假設新→舊）。
+HistoryEntry? latestConfirmedOnDay(
+  List<HistoryEntry> history,
+  DateTime day,
+) {
+  for (final h in history) {
+    if (isSameLocalDay(h.confirmedAt, day)) return h;
+  }
+  return null;
+}
+
 /// 全域 App 狀態。
 class AppState extends ChangeNotifier {
   AppState({
@@ -42,6 +60,12 @@ class AppState extends ChangeNotifier {
   final Set<String> _skippedThisSession = {};
   MealSlot mealSlot = MealSlot.fromDateTime(DateTime.now());
 
+  /// 使用者主動要「再決定一次」時暫時隱藏今日已決定態。
+  bool _forceRedecide = false;
+
+  /// 冷啟動結束後首頁提示「想穩妥」（toast 用，顯示後清掉）。
+  bool showDefaultMoodHint = false;
+
   int get rerollsLeft =>
       (DecisionEngine.dailyRerollLimit - rerollsUsedToday)
           .clamp(0, DecisionEngine.dailyRerollLimit);
@@ -51,6 +75,43 @@ class AppState extends ChangeNotifier {
 
   /// 無真實定位時不可顯示「約 N 公尺」（錨點距離會誤導）。
   bool get showRealDistance => locationOk;
+
+  /// 今日已確認的歷史（若使用者要求再決定則為 null）。
+  HistoryEntry? get todayConfirmed {
+    if (_forceRedecide) return null;
+    return latestConfirmedOnDay(history, DateTime.now());
+  }
+
+  bool get hasConfirmedToday => todayConfirmed != null;
+
+  /// 解析今日已確認店家（nearby／current 優先，否則用歷史組最小 Place）。
+  Place? placeForTodayConfirmed() {
+    final entry = todayConfirmed;
+    if (entry == null) return null;
+    if (current?.place.id == entry.placeId) return current!.place;
+    for (final p in nearby) {
+      if (p.id == entry.placeId) return p;
+    }
+    return Place(
+      id: entry.placeId,
+      name: entry.placeName,
+      lat: 25.0478,
+      lng: 121.5170,
+      cuisineTags: entry.cuisineTags,
+      isDemo: entry.placeId.startsWith('demo_'),
+    );
+  }
+
+  /// 軟路徑：離開「今天就這家」，回到一般決策卡。
+  void requestRedecide() {
+    _forceRedecide = true;
+    notifyListeners();
+  }
+
+  void consumeDefaultMoodHint() {
+    if (!showDefaultMoodHint) return;
+    showDefaultMoodHint = false;
+  }
 
   Future<void> bootstrap() async {
     status = AppLoadStatus.loading;
@@ -62,6 +123,7 @@ class AppState extends ChangeNotifier {
       history = await _storage.loadHistory();
       rerollsUsedToday = await _storage.loadRerollCountToday();
       mealSlot = MealSlot.fromDateTime(DateTime.now());
+      _forceRedecide = false;
 
       final loc = await _location.getCurrentLocation();
       locationOk = loc != null;
@@ -87,16 +149,16 @@ class AppState extends ChangeNotifier {
 
   Future<void> completeColdStart(Map<String, bool> answers) async {
     // answers: id -> choseA
+    // carb: A=麵; flavor: A=清淡; mood: A=想穩妥
+    final choseSafe = answers['mood'] ?? true;
+    final mood = choseSafe ? Mood.safe : Mood.adventure;
     prefs = prefs.copyWith(
       prefersNoodles: answers['carb'],
       prefersLight: answers['flavor'],
-      prefersDineIn: answers['dine'],
-      budgetSensitive: answers['budget'],
-      prefersQuick: answers['tempo'],
       coldStartDone: true,
+      mood: mood,
     );
-    // carb: A=麵=true; flavor: A=清淡=true; dine: A=內用=true;
-    // budget: A=省錢=true; tempo: A=快速=true
+    showDefaultMoodHint = mood == Mood.safe;
     await _storage.savePrefs(prefs);
     await _pickDecision(initial: true);
     notifyListeners();
@@ -108,6 +170,7 @@ class AppState extends ChangeNotifier {
       coldStartDone: true,
       mood: Mood.safe,
     );
+    showDefaultMoodHint = true;
     await _storage.savePrefs(prefs);
     await _pickDecision(initial: true);
     notifyListeners();
@@ -159,6 +222,7 @@ class AppState extends ChangeNotifier {
     if (d.isBalanceNudge) {
       await _storage.saveLastBalanceNudgeAt(DateTime.now());
     }
+    _forceRedecide = false;
     notifyListeners();
     return d.place;
   }

@@ -19,11 +19,11 @@ class UserPrefs {
   final bool? prefersNoodles;
   /// true=清淡, false=重口味
   final bool? prefersLight;
-  /// true=內用, false=外帶
+  /// true=內用, false=外帶（舊 cold-start 保留欄位）
   final bool? prefersDineIn;
-  /// true=省錢
+  /// true=省錢（舊 cold-start 保留欄位）
   final bool? budgetSensitive;
-  /// true=快速簡單
+  /// true=快速簡單（舊 cold-start 保留欄位）
   final bool? prefersQuick;
   final bool coldStartDone;
   final Mood mood;
@@ -131,6 +131,7 @@ class ColdStartQuestion {
   final String optionB;
 }
 
+/// P1-2：3 題（麵／飯、清淡／重口、穩妥／嘗鮮）。
 const coldStartQuestions = <ColdStartQuestion>[
   ColdStartQuestion(
     id: 'carb',
@@ -145,21 +146,9 @@ const coldStartQuestions = <ColdStartQuestion>[
     optionB: '重口味',
   ),
   ColdStartQuestion(
-    id: 'dine',
-    prompt: '用餐方式？',
-    optionA: '內用',
-    optionB: '外帶',
-  ),
-  ColdStartQuestion(
-    id: 'budget',
-    prompt: '預算？',
-    optionA: '省錢',
-    optionB: '可稍貴',
-  ),
-  ColdStartQuestion(
-    id: 'tempo',
-    prompt: '節奏？',
-    optionA: '快速簡單',
-    optionB: '可以慢慢吃',
+    id: 'mood',
+    prompt: '這一餐想怎麼挑？',
+    optionA: '想穩妥一點',
+    optionB: '想試試新的',
   ),
 ];

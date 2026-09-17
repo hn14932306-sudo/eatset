@@ -8,13 +8,36 @@ import '../widgets/mood_chips.dart';
 import 'confirm_screen.dart';
 import 'history_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final app = context.read<AppState>();
+      if (!app.showDefaultMoodHint) return;
+      app.consumeDefaultMoodHint();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('先用「想穩妥」幫你挑；下方可改心情'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final scheme = Theme.of(context).colorScheme;
+    final confirmed = state.hasConfirmedToday;
 
     if (state.status == AppLoadStatus.loading && state.current == null) {
       return const Scaffold(
@@ -64,9 +87,14 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Text('這一餐就吃', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              confirmed ? '今天就這家' : '這一餐就吃',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            if (state.current != null)
+            if (confirmed)
+              _ConfirmedTodayCard(state: state)
+            else if (state.current != null)
               DecisionCard(
                 decision: state.current!,
                 showRealDistance: state.showRealDistance,
@@ -74,51 +102,68 @@ class HomeScreen extends StatelessWidget {
             else
               _EmptyDecisionCard(state: state),
             const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: state.current == null
-                  ? null
-                  : () => _onConfirm(context),
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('就吃這個'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
+            if (confirmed) ...[
+              FilledButton.icon(
+                onPressed: () => _openConfirmedMaps(context, state),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('開啟地圖'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: state.current == null || state.rerollsLeft <= 0
-                  ? null
-                  : () => context.read<AppState>().reroll(),
-              icon: const Icon(Icons.shuffle),
-              label: Text(
-                state.rerollsLeft > 0
-                    ? '換一個 · 今日剩 ${state.rerollsLeft}'
-                    : '今日已換完（上限 ${DecisionEngine.dailyRerollLimit}）',
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => context.read<AppState>().requestRedecide(),
+                child: const Text('想換一家'),
               ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
+            ] else ...[
+              FilledButton.icon(
+                onPressed: state.current == null
+                    ? null
+                    : () => _onConfirm(context),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('就吃這個'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
               ),
-            ),
-            if (state.rerollsLeft <= 0 && state.current != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                '明天再換；或微調心情後仍會重算',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: state.current == null || state.rerollsLeft <= 0
+                    ? null
+                    : () => context.read<AppState>().reroll(),
+                icon: const Icon(Icons.shuffle),
+                label: Text(
+                  state.rerollsLeft > 0
+                      ? '換一個 · 今日剩 ${state.rerollsLeft}'
+                      : '今日已換完（上限 ${DecisionEngine.dailyRerollLimit}）',
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
               ),
+              if (state.rerollsLeft <= 0 && state.current != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '明天再換；或微調心情後仍會重算',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
             ],
             const SizedBox(height: 8),
             Row(
               children: [
                 const Expanded(child: _MoodTuneDisclosure()),
-                TextButton.icon(
-                  onPressed: state.current == null
-                      ? null
-                      : () => _showMoreActions(context, state),
-                  icon: const Icon(Icons.more_horiz, size: 20),
-                  label: const Text('更多'),
-                ),
+                if (!confirmed)
+                  TextButton.icon(
+                    onPressed: state.current == null
+                        ? null
+                        : () => _showMoreActions(context, state),
+                    icon: const Icon(Icons.more_horiz, size: 20),
+                    label: const Text('更多'),
+                  ),
               ],
             ),
           ],
@@ -136,6 +181,19 @@ class HomeScreen extends StatelessWidget {
         builder: (_) => ConfirmScreen(
           place: place,
           isDemo: app.isDemo || place.isDemo,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openConfirmedMaps(BuildContext context, AppState state) async {
+    final place = state.placeForTodayConfirmed();
+    if (place == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConfirmScreen(
+          place: place,
+          isDemo: state.isDemo || place.isDemo,
         ),
       ),
     );
@@ -257,6 +315,55 @@ class HomeScreen extends StatelessWidget {
                   onUndo();
                 },
               ),
+      ),
+    );
+  }
+}
+
+/// 今日已決定：顯示確認店名（非重新決策主路徑）。
+class _ConfirmedTodayCard extends StatelessWidget {
+  const _ConfirmedTodayCard({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final entry = state.todayConfirmed!;
+    final place = state.placeForTodayConfirmed();
+    final decision =
+        state.current?.place.id == entry.placeId ? state.current : null;
+
+    if (decision != null) {
+      return DecisionCard(
+        decision: decision,
+        showRealDistance: state.showRealDistance,
+      );
+    }
+
+    return Card(
+      elevation: 0,
+      color: scheme.primaryContainer.withValues(alpha: 0.55),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              place?.name ?? entry.placeName,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '今天已確認，不用再糾結',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
