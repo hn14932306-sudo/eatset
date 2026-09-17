@@ -63,6 +63,9 @@ class AppState extends ChangeNotifier {
   /// 使用者主動要「再決定一次」時暫時隱藏今日已決定態。
   bool _forceRedecide = false;
 
+  /// 剛排除、可一鍵復原的店（完整 Place，不依賴 nearby 查找）。
+  Place? _pendingUndoPlace;
+
   /// 冷啟動結束後首頁提示「想穩妥」（toast 用，顯示後清掉）。
   bool showDefaultMoodHint = false;
 
@@ -232,6 +235,8 @@ class AppState extends ChangeNotifier {
     final d = current;
     if (d == null) return null;
     final name = d.place.name;
+    // 復原前先快取完整 Place，避免只靠 nearby id 查找失敗。
+    _pendingUndoPlace = d.place;
     final ids = {...prefs.excludedPlaceIds, d.place.id};
     final names = {...prefs.excludedPlaceNames, d.place.id: name};
     prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
@@ -282,19 +287,36 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> removeExcludedPlace(String placeId) async {
+    // 先取名稱再建 Place（在從 prefs 刪除名稱之前）。
+    final storedName = prefs.excludedPlaceNames[placeId];
+
+    Place? restored;
+    if (_pendingUndoPlace?.id == placeId) {
+      restored = _pendingUndoPlace;
+    } else {
+      for (final p in nearby) {
+        if (p.id == placeId) {
+          restored = p;
+          break;
+        }
+      }
+    }
+    if (restored == null && storedName != null && storedName.isNotEmpty) {
+      restored = Place(
+        id: placeId,
+        name: storedName,
+        lat: 25.0478,
+        lng: 121.5170,
+        isDemo: placeId.startsWith('demo_'),
+      );
+    }
+
     final ids = {...prefs.excludedPlaceIds}..remove(placeId);
     final names = {...prefs.excludedPlaceNames}..remove(placeId);
     prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
-    await _storage.savePrefs(prefs);
     _skippedThisSession.remove(placeId);
-    // 復原必須回到同一家，不能只重新抽（否則驗收看不到卡片回復）。
-    Place? restored;
-    for (final p in nearby) {
-      if (p.id == placeId) {
-        restored = p;
-        break;
-      }
-    }
+    _pendingUndoPlace = null;
+
     if (restored != null) {
       current = Decision(
         place: restored,
@@ -302,15 +324,18 @@ class AppState extends ChangeNotifier {
         score: 1,
         mealSlot: mealSlot.labelZh,
       );
-      // 清掉「無候選」備註尾巴若有
       if (statusNote != null && statusNote!.contains('目前沒有合適選項')) {
         statusNote = isDemo
             ? '示範模式 · 非你附近的真實店家'
             : (locationOk ? null : statusNote);
       }
-    } else {
-      await _pickDecision(initial: true);
+      notifyListeners();
+      await _storage.savePrefs(prefs);
+      return;
     }
+
+    await _storage.savePrefs(prefs);
+    await _pickDecision(initial: true);
     notifyListeners();
   }
 

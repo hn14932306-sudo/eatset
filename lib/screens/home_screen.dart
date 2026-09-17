@@ -222,17 +222,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: const Text('之後不再推薦這一家'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final placeId = state.current?.place.id;
+                  final app = context.read<AppState>();
+                  final placeId = app.current?.place.id;
                   if (placeId == null) return;
-                  final name =
-                      await context.read<AppState>().excludeCurrentPlace();
+                  final name = await app.excludeCurrentPlace();
                   if (!context.mounted || name == null) return;
                   _showUndoSnackBar(
                     context,
                     message: '已排除「$name」',
-                    onUndo: () => context
-                        .read<AppState>()
-                        .removeExcludedPlace(placeId),
+                    onUndo: () {
+                      // 用排除當下捕獲的 AppState，避免 SnackBar 回調時 context.read 失敗。
+                      app.removeExcludedPlace(placeId);
+                    },
                   );
                 },
               ),
@@ -279,14 +280,15 @@ class _HomeScreenState extends State<HomeScreen> {
             FilledButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                final cat =
-                    await context.read<AppState>().excludeCategory(category);
+                final app = context.read<AppState>();
+                final cat = await app.excludeCategory(category);
                 if (!context.mounted || cat == null) return;
                 _showUndoSnackBar(
                   context,
                   message: '之後少推「$cat」',
-                  onUndo: () =>
-                      context.read<AppState>().removeExcludedCategory(cat),
+                  onUndo: () {
+                    app.removeExcludedCategory(cat);
+                  },
                 );
               },
               child: const Text('排除'),
@@ -300,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showUndoSnackBar(
     BuildContext context, {
     required String message,
-    required Future<void> Function() onUndo,
+    required VoidCallback onUndo,
   }) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -309,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
         content: Text(message),
         action: SnackBarAction(
           label: '復原',
+          // sync VoidCallback：kick off Future，不依賴 async tear-off。
           onPressed: onUndo,
         ),
       ),
