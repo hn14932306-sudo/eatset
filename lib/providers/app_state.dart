@@ -66,6 +66,11 @@ class AppState extends ChangeNotifier {
   /// 剛排除、可一鍵復原的店（完整 Place，不依賴 nearby 查找）。
   Place? _pendingUndoPlace;
 
+  /// 供 Home 顯示持久復原按鈕（SnackBarAction 在 Flutter Web 常不觸發）。
+  Place? get pendingUndoPlace => _pendingUndoPlace;
+
+  bool get hasPendingUndo => _pendingUndoPlace != null;
+
   /// 冷啟動結束後首頁提示「想穩妥」（toast 用，顯示後清掉）。
   bool showDefaultMoodHint = false;
 
@@ -189,6 +194,7 @@ class AppState extends ChangeNotifier {
   /// 重抽：若沒有真正換到另一家，不扣每日次數。
   Future<void> reroll() async {
     if (rerollsLeft <= 0) return;
+    _pendingUndoPlace = null; // 換卡後立刻隱藏復原
     final previousId = current?.place.id;
     if (previousId != null) {
       _skippedThisSession.add(previousId);
@@ -213,6 +219,7 @@ class AppState extends ChangeNotifier {
   Future<Place?> confirmCurrent() async {
     final d = current;
     if (d == null) return null;
+    _pendingUndoPlace = null; // 確認後不再顯示復原
     final entry = HistoryEntry(
       placeId: d.place.id,
       placeName: d.place.name,
@@ -337,6 +344,13 @@ class AppState extends ChangeNotifier {
     await _storage.savePrefs(prefs);
     await _pickDecision(initial: true);
     notifyListeners();
+  }
+
+  /// 一鍵復原剛排除的店（持久按鈕／SnackBar 共用）。
+  Future<void> undoLastExcludedPlace() async {
+    final pending = _pendingUndoPlace;
+    if (pending == null) return;
+    await removeExcludedPlace(pending.id);
   }
 
   Future<void> removeExcludedCategory(String category) async {

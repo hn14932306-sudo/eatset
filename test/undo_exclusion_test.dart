@@ -50,6 +50,9 @@ void main() {
     // 排除後應換到另一家
     expect(app.current?.place.id, isNot('demo_a'));
     expect(app.current?.place.id, 'demo_b');
+    expect(app.pendingUndoPlace, isNotNull);
+    expect(app.pendingUndoPlace!.id, 'demo_a');
+    expect(app.pendingUndoPlace!.name, '老王紅燒牛肉麵');
 
     await app.removeExcludedPlace('demo_a');
 
@@ -58,6 +61,7 @@ void main() {
     expect(app.current!.place.name, '老王紅燒牛肉麵');
     expect(app.current!.reasonZh, contains('復原'));
     expect(app.prefs.excludedPlaceIds.contains('demo_a'), isFalse);
+    expect(app.pendingUndoPlace, isNull);
   });
 
   test('undo restores from pending cache even if nearby lacks the place',
@@ -111,5 +115,51 @@ void main() {
     expect(app.current!.place.id, 'gone_id');
     expect(app.current!.place.name, '記憶中的店');
     expect(app.current!.reasonZh, contains('復原'));
+  });
+
+  test('undoLastExcludedPlace restores pending shop + clears pending', () async {
+    final a = place(id: 'demo_a', name: '老王紅燒牛肉麵');
+    final b = place(id: 'demo_b', name: '阿美健康便當', tags: const ['飯']);
+
+    final app = AppState();
+    app.prefs = const UserPrefs(coldStartDone: true);
+    app.nearby = [a, b];
+    app.current = Decision(
+      place: a,
+      reasonZh: '評分不錯又夠近',
+      score: 0.9,
+      mealSlot: '午餐',
+    );
+    app.status = AppLoadStatus.ready;
+    app.isDemo = true;
+
+    await app.excludeCurrentPlace();
+    expect(app.hasPendingUndo, isTrue);
+    expect(app.pendingUndoPlace!.id, 'demo_a');
+
+    await app.undoLastExcludedPlace();
+
+    expect(app.current!.place.id, 'demo_a');
+    expect(app.current!.place.name, '老王紅燒牛肉麵');
+    expect(app.current!.reasonZh, '已復原你剛才排除的店');
+    expect(app.hasPendingUndo, isFalse);
+    expect(app.pendingUndoPlace, isNull);
+    expect(app.prefs.excludedPlaceIds.contains('demo_a'), isFalse);
+  });
+
+  test('undoLastExcludedPlace is no-op when nothing pending', () async {
+    final app = AppState();
+    app.prefs = const UserPrefs(coldStartDone: true);
+    app.nearby = [place(id: 'x', name: '店')];
+    app.current = Decision(
+      place: place(id: 'x', name: '店'),
+      reasonZh: '目前',
+      score: 0.5,
+      mealSlot: '午餐',
+    );
+    final beforeId = app.current!.place.id;
+    await app.undoLastExcludedPlace();
+    expect(app.current!.place.id, beforeId);
+    expect(app.hasPendingUndo, isFalse);
   });
 }

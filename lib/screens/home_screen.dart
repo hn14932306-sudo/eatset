@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -102,6 +103,22 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             else
               _EmptyDecisionCard(state: state),
+            if (!confirmed && state.hasPendingUndo) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('undo_excluded_place'),
+                  onPressed: () {
+                    unawaited(
+                      context.read<AppState>().undoLastExcludedPlace(),
+                    );
+                  },
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: Text('復原「${state.pendingUndoPlace!.name}」'),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             if (confirmed) ...[
               FilledButton.icon(
@@ -223,16 +240,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.pop(ctx);
                   final app = context.read<AppState>();
-                  final placeId = app.current?.place.id;
-                  if (placeId == null) return;
+                  if (app.current == null) return;
                   final name = await app.excludeCurrentPlace();
                   if (!context.mounted || name == null) return;
                   _showUndoSnackBar(
                     context,
                     message: '已排除「$name」',
                     onUndo: () {
-                      // 用排除當下捕獲的 AppState，避免 SnackBar 回調時 context.read 失敗。
-                      app.removeExcludedPlace(placeId);
+                      // 用排除當下捕獲的 AppState；Web 上 SnackBarAction 常不觸發，
+                      // Home 另有持久復原按鈕走同一 undoLastExcludedPlace。
+                      unawaited(app.undoLastExcludedPlace());
                     },
                   );
                 },
@@ -309,9 +326,12 @@ class _HomeScreenState extends State<HomeScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
+        duration: const Duration(seconds: 8),
+        behavior: SnackBarBehavior.floating,
         action: SnackBarAction(
           label: '復原',
           // sync VoidCallback：kick off Future，不依賴 async tear-off。
+          // Flutter Web 上 SnackBarAction 常不觸發；Home 另有持久復原按鈕。
           onPressed: onUndo,
         ),
       ),
