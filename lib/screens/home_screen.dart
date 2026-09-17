@@ -5,6 +5,7 @@ import '../providers/app_state.dart';
 import '../services/decision_engine.dart';
 import '../widgets/decision_card.dart';
 import '../widgets/mood_chips.dart';
+import 'confirm_screen.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -50,89 +51,97 @@ class HomeScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Row(
-              children: [
-                Chip(
-                  label: Text(state.mealSlot.labelZh),
-                  avatar: const Icon(Icons.schedule, size: 18),
-                ),
-                const SizedBox(width: 8),
-                if (state.isDemo)
-                  Chip(
-                    label: const Text('Demo'),
-                    backgroundColor: scheme.tertiaryContainer,
-                  ),
-                if (!state.locationOk) ...[
-                  const SizedBox(width: 8),
-                  Chip(
-                    label: const Text('未定位'),
-                    backgroundColor: scheme.errorContainer,
-                  ),
-                ],
-              ],
-            ),
-            if (state.statusNote != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                state.statusNote!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+            if (state.isDemo || !state.locationOk)
+              _StatusBanner(state: state),
+            if (state.isDemo || !state.locationOk) const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Chip(
+                label: Text(state.mealSlot.labelZh),
+                avatar: const Icon(Icons.schedule, size: 18),
+                visualDensity: VisualDensity.compact,
               ),
-            ],
+            ),
             const SizedBox(height: 20),
             Text('這一餐就吃', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (state.current != null)
-              DecisionCard(decision: state.current!)
+              DecisionCard(
+                decision: state.current!,
+                showRealDistance: state.showRealDistance,
+              )
             else
               _EmptyDecisionCard(state: state),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: state.current == null
                   ? null
-                  : () => context.read<AppState>().confirmCurrent(),
+                  : () => _onConfirm(context),
               icon: const Icon(Icons.check_circle_outline),
               label: const Text('就吃這個'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: state.current == null || state.rerollsLeft <= 0
                   ? null
                   : () => context.read<AppState>().reroll(),
-              icon: const Icon(Icons.casino_outlined),
+              icon: const Icon(Icons.shuffle),
               label: Text(
                 state.rerollsLeft > 0
-                    ? '換一個（今日剩 ${state.rerollsLeft}）'
-                    : '今日重抽已用完（上限 ${DecisionEngine.dailyRerollLimit}）',
+                    ? '換一個 · 今日剩 ${state.rerollsLeft}'
+                    : '今日已換完（上限 ${DecisionEngine.dailyRerollLimit}）',
               ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: state.current == null
-                    ? null
-                    : () => _showMoreActions(context, state),
-                icon: const Icon(Icons.more_horiz, size: 20),
-                label: const Text('更多'),
+            if (state.rerollsLeft <= 0 && state.current != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                '明天再換；或微調心情後仍會重算',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
               ),
-            ),
+            ],
             const SizedBox(height: 8),
-            const _MoodTuneDisclosure(),
+            Row(
+              children: [
+                const Expanded(child: _MoodTuneDisclosure()),
+                TextButton.icon(
+                  onPressed: state.current == null
+                      ? null
+                      : () => _showMoreActions(context, state),
+                  icon: const Icon(Icons.more_horiz, size: 20),
+                  label: const Text('更多'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
+  Future<void> _onConfirm(BuildContext context) async {
+    final app = context.read<AppState>();
+    final place = await app.confirmCurrent();
+    if (place == null || !context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConfirmScreen(
+          place: place,
+          isDemo: app.isDemo || place.isDemo,
+        ),
+      ),
+    );
+  }
+
   void _showMoreActions(BuildContext context, AppState state) {
+    final category = state.inferCategoryForCurrent();
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) {
@@ -141,18 +150,41 @@ class HomeScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                title: const Text('更多'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.block_outlined),
                 title: const Text('不要這家'),
                 subtitle: const Text('之後不再推薦這一家'),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  context.read<AppState>().excludeCurrentPlace();
+                  final placeId = state.current?.place.id;
+                  final name =
+                      await context.read<AppState>().excludeCurrentPlace();
+                  if (!context.mounted || name == null) return;
+                  _showUndoSnackBar(
+                    context,
+                    message: '已排除「$name」',
+                    onUndo: placeId == null
+                        ? null
+                        : () => context
+                            .read<AppState>()
+                            .removeExcludedPlace(placeId),
+                  );
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.category_outlined),
                 title: const Text('不要這類'),
-                subtitle: const Text('排除系統推斷的這一類'),
+                subtitle: Text(
+                  category == null
+                      ? '排除系統判斷的這一類'
+                      : '排除系統判斷的「$category」',
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _confirmExcludeCategory(context);
@@ -179,22 +211,107 @@ class HomeScreen extends StatelessWidget {
       builder: (ctx) {
         return AlertDialog(
           title: const Text('不要這類？'),
-          content: Text('要排除「$category」這類餐廳嗎？'),
+          content: Text('之後少推「$category」這類店家？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('否'),
+              child: const Text('先不要'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                context.read<AppState>().excludeCategory(category);
+                final cat =
+                    await context.read<AppState>().excludeCategory(category);
+                if (!context.mounted || cat == null) return;
+                _showUndoSnackBar(
+                  context,
+                  message: '之後少推「$cat」',
+                  onUndo: () =>
+                      context.read<AppState>().removeExcludedCategory(cat),
+                );
               },
-              child: const Text('是'),
+              child: const Text('排除'),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _showUndoSnackBar(
+    BuildContext context, {
+    required String message,
+    Future<void> Function()? onUndo,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: onUndo == null
+            ? null
+            : SnackBarAction(
+                label: '復原',
+                onPressed: () {
+                  onUndo();
+                },
+              ),
+      ),
+    );
+  }
+}
+
+/// Demo／未定位誠實橫幅（設計 §5）。
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final Color bg;
+    final String title;
+    final String subtitle;
+
+    if (state.isDemo && !state.locationOk) {
+      bg = scheme.tertiaryContainer;
+      title = '示範模式 · 非你附近的真實店家';
+      subtitle = '目前用示範店家 · 何時開定位都可以';
+    } else if (state.isDemo) {
+      bg = scheme.tertiaryContainer;
+      title = '示範模式 · 非你附近的真實店家';
+      subtitle = '開定位與 API 後會改推附近餐廳';
+    } else {
+      bg = scheme.errorContainer;
+      title = '需要定位才能找附近餐廳';
+      subtitle = '請允許定位權限後下拉重新整理';
+    }
+
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -211,12 +328,12 @@ class _EmptyDecisionCard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Text('暫時找不到合適選項'),
+            const Text('暫時沒有合適選項'),
             const SizedBox(height: 8),
             Text(
               state.hasExclusions
-                  ? '可取消部分排除，或稍後再試。'
-                  : '稍後再試，或下拉重新整理。App 不會停在空白頁。',
+                  ? '可解除部分排除，或稍後再試'
+                  : '稍後再試，或下拉重新整理。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -260,7 +377,7 @@ class _EmptyDecisionCard extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const HistoryScreen()),
                 );
               },
-              child: const Text('管理排除項目'),
+              child: const Text('管理排除'),
             ),
           ],
         ),

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/user_prefs.dart';
 import '../providers/app_state.dart';
 
-/// Cold start：多輪二選一。
+/// Cold start：多輪二選一；可「先用預設，直接決定」跳過。
 class ColdStartScreen extends StatefulWidget {
   const ColdStartScreen({super.key});
 
@@ -39,10 +39,23 @@ class _ColdStartScreenState extends State<ColdStartScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('吃定了', style: Theme.of(context).textTheme.headlineMedium),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '吃定了',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.read<AppState>().skipColdStart(),
+                    child: const Text('先用預設，直接決定'),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Text(
-                '先快速了解你的口味，之後一鍵決定這一餐',
+                '先快速了解口味，之後一鍵決定這一餐',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -78,7 +91,7 @@ class _ColdStartScreenState extends State<ColdStartScreen> {
               ),
               const Spacer(flex: 2),
               Text(
-                '之後仍可在決策頁微調心情與排除店家',
+                '之後仍可在首頁微調心情與排除店家',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,

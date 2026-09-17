@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'providers/app_state.dart';
 import 'screens/cold_start_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/eatset_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,20 +27,8 @@ class EatSetApp extends StatelessWidget {
         title: '吃定了',
         debugShowCheckedModeBanner: false,
         locale: const Locale('zh', 'TW'),
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE85D04),
-            brightness: Brightness.light,
-          ),
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE85D04),
-            brightness: Brightness.dark,
-          ),
-        ),
+        theme: EatSetTheme.light(),
+        darkTheme: EatSetTheme.dark(),
         home: const _RootGate(),
       ),
     );
@@ -61,9 +50,11 @@ class _RootGate extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   '吃定了',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -84,19 +75,24 @@ class _RootGate extends StatelessWidget {
     }
 
     if (state.status != AppLoadStatus.ready) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 '吃定了',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
-              SizedBox(height: 16),
-              CircularProgressIndicator(),
-              SizedBox(height: 12),
-              Text('準備中…'),
+              const SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text(
+                '準備這一餐…',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ],
           ),
         ),

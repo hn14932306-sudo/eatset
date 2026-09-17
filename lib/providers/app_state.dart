@@ -6,7 +6,6 @@ import '../models/place.dart';
 import '../models/user_prefs.dart';
 import '../services/decision_engine.dart';
 import '../services/location_service.dart';
-import '../services/maps_launcher.dart';
 import '../services/places_service.dart';
 import '../services/storage_service.dart';
 
@@ -49,6 +48,9 @@ class AppState extends ChangeNotifier {
 
   bool get hasExclusions =>
       prefs.excludedPlaceIds.isNotEmpty || prefs.excludedCategories.isNotEmpty;
+
+  /// 無真實定位時不可顯示「約 N 公尺」（錨點距離會誤導）。
+  bool get showRealDistance => locationOk;
 
   Future<void> bootstrap() async {
     status = AppLoadStatus.loading;
@@ -100,6 +102,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 跳過冷啟動：套用預設「想穩妥」，直接進決策首頁。
+  Future<void> skipColdStart() async {
+    prefs = prefs.copyWith(
+      coldStartDone: true,
+      mood: Mood.safe,
+    );
+    await _storage.savePrefs(prefs);
+    await _pickDecision(initial: true);
+    notifyListeners();
+  }
+
   Future<void> setMood(Mood mood) async {
     prefs = prefs.copyWith(mood: mood);
     await _storage.savePrefs(prefs);
@@ -130,9 +143,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> confirmCurrent() async {
+  /// 確認這一餐：寫入歷史。地圖改由 S7 畫面開啟。
+  Future<Place?> confirmCurrent() async {
     final d = current;
-    if (d == null) return;
+    if (d == null) return null;
     final entry = HistoryEntry(
       placeId: d.place.id,
       placeName: d.place.name,
@@ -146,27 +160,31 @@ class AppState extends ChangeNotifier {
       await _storage.saveLastBalanceNudgeAt(DateTime.now());
     }
     notifyListeners();
-    await MapsLauncher.openPlace(d.place);
+    return d.place;
   }
 
-  Future<void> excludeCurrentPlace() async {
+  /// 排除目前店家；回傳被排除的店名供 snackbar／復原。
+  Future<String?> excludeCurrentPlace() async {
     final d = current;
-    if (d == null) return;
+    if (d == null) return null;
+    final name = d.place.name;
     final ids = {...prefs.excludedPlaceIds, d.place.id};
-    final names = {...prefs.excludedPlaceNames, d.place.id: d.place.name};
+    final names = {...prefs.excludedPlaceNames, d.place.id: name};
     prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
     await _storage.savePrefs(prefs);
     _skippedThisSession.add(d.place.id);
     await _pickDecision();
     notifyListeners();
+    return name;
   }
 
-  Future<void> excludeCategory(String category) async {
+  Future<String?> excludeCategory(String category) async {
     final cats = {...prefs.excludedCategories, category};
     prefs = prefs.copyWith(excludedCategories: cats);
     await _storage.savePrefs(prefs);
     await _pickDecision();
     notifyListeners();
+    return category;
   }
 
   /// 從目前店家推斷「不要這類」的單一類別（無多選清單）。
@@ -204,6 +222,7 @@ class AppState extends ChangeNotifier {
     final names = {...prefs.excludedPlaceNames}..remove(placeId);
     prefs = prefs.copyWith(excludedPlaceIds: ids, excludedPlaceNames: names);
     await _storage.savePrefs(prefs);
+    _skippedThisSession.remove(placeId);
     await _pickDecision(initial: true);
     notifyListeners();
   }

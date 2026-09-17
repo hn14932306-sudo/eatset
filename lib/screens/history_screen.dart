@@ -91,7 +91,7 @@ class HistoryScreen extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('目前沒有排除項目'),
+                title: Text('目前沒有排除'),
                 subtitle: Text('在首頁「更多」可排除店家或類別'),
               ),
             ),
