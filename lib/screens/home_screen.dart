@@ -421,7 +421,10 @@ class _StatusBanner extends StatelessWidget {
     } else if (state.isDemo) {
       bg = scheme.tertiaryContainer;
       title = '示範模式 · 非你附近的真實店家';
-      subtitle = '開定位與 API 後會改推附近餐廳';
+      // Places 失敗／無金鑰時的 noteZh 會進 statusNote；有則顯示具體原因。
+      subtitle = (state.statusNote != null && state.statusNote!.trim().isNotEmpty)
+          ? state.statusNote
+          : '開定位與 API 後會改推附近餐廳';
     } else {
       bg = scheme.errorContainer;
       title = '需要定位才能找附近餐廳';
