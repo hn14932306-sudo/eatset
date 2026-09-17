@@ -43,6 +43,7 @@ class LocationService {
   static const UserLocation debugFallbackLocation = UserLocation(
     lat: 25.0478,
     lng: 121.5170,
+    fromDevice: false,
   );
 
   /// 取得目前位置；會在 denied 時再請求一次權限。
