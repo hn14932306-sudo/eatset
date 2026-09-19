@@ -64,28 +64,10 @@ void main() {
       mood: Mood.safe,
       coldStartDone: true,
     );
-    final noodle = place(
-      id: 'n',
-      name: '牛肉麵',
-      tags: ['麵', '重口味'],
-      rating: 4.4,
-    );
-    final rice = place(
-      id: 'r',
-      name: '雞腿飯',
-      tags: ['飯'],
-      rating: 4.4,
-    );
-    final sn = engine.scorePlace(
-      noodle,
-      prefs,
-      mealSlot: MealSlot.lunch,
-    );
-    final sr = engine.scorePlace(
-      rice,
-      prefs,
-      mealSlot: MealSlot.lunch,
-    );
+    final noodle = place(id: 'n', name: '牛肉麵', tags: ['麵', '重口味'], rating: 4.4);
+    final rice = place(id: 'r', name: '雞腿飯', tags: ['飯'], rating: 4.4);
+    final sn = engine.scorePlace(noodle, prefs, mealSlot: MealSlot.lunch);
+    final sr = engine.scorePlace(rice, prefs, mealSlot: MealSlot.lunch);
     expect(sn, greaterThan(sr));
   });
 
@@ -100,11 +82,7 @@ void main() {
       place(id: 'a', name: '老王牛肉麵', tags: ['麵', '重口味'], rating: 4.6),
       place(id: 'b', name: '清粥小菜', tags: ['飯', '清淡'], rating: 4.2),
     ];
-    final d = engine.decide(
-      places,
-      prefs,
-      mealSlot: MealSlot.dinner,
-    );
+    final d = engine.decide(places, prefs, mealSlot: MealSlot.dinner);
     expect(d, isNotNull);
     expect(d!.place.id, 'a');
     expect(d.reasonZh, isNotEmpty);
@@ -120,6 +98,7 @@ void main() {
         placeName: '麻辣火鍋$i',
         confirmedAt: now.subtract(Duration(days: i + 1)),
         cuisineTags: const ['重口味', '火鍋'],
+        feedback: MealFeedback.neutral,
       ),
     );
     expect(

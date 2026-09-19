@@ -12,8 +12,9 @@ void main() {
     isDemo: true,
   );
 
-  testWidgets('S7 maps failure stays on screen with retry and later',
-      (tester) async {
+  testWidgets('S7 maps failure stays on screen with retry and later', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ConfirmScreen(
@@ -43,10 +44,7 @@ void main() {
   testWidgets('S7 maps success does not show failure banner', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: ConfirmScreen(
-          place: place,
-          openMapsOverride: (_) async => true,
-        ),
+        home: ConfirmScreen(place: place, openMapsOverride: (_) async => true),
       ),
     );
 

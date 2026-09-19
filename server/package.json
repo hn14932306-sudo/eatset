@@ -1,0 +1,7 @@
+{
+  "name": "eatset-api",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": { "start": "node index.mjs", "test": "node --test test/*.test.mjs", "usage": "node usage.mjs" }
+}

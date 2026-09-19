@@ -31,8 +31,9 @@ class MoodChips extends StatelessWidget {
           onSelected: (_) => onChanged(m),
           showCheckmark: false,
           selectedColor: scheme.secondaryContainer,
-          visualDensity:
-              compact ? VisualDensity.compact : VisualDensity.standard,
+          visualDensity: compact
+              ? VisualDensity.compact
+              : VisualDensity.standard,
           materialTapTargetSize: compact
               ? MaterialTapTargetSize.shrinkWrap
               : MaterialTapTargetSize.padded,

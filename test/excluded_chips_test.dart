@@ -9,8 +9,7 @@ void main() {
         home: Scaffold(
           body: ExcludedChipsWrap(
             chips: [
-              for (var i = 0; i < 12; i++)
-                InputChip(label: Text('chip_$i')),
+              for (var i = 0; i < 12; i++) InputChip(label: Text('chip_$i')),
             ],
           ),
         ),
@@ -36,8 +35,7 @@ void main() {
         home: Scaffold(
           body: ExcludedChipsWrap(
             chips: [
-              for (var i = 0; i < 10; i++)
-                InputChip(label: Text('only_$i')),
+              for (var i = 0; i < 10; i++) InputChip(label: Text('only_$i')),
             ],
           ),
         ),

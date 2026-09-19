@@ -1,181 +1,143 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
-import '../config/api_keys.dart';
 import '../models/place.dart';
+import '../models/place_photo.dart';
+import 'backend_client.dart';
 import 'demo_places.dart';
 import 'location_service.dart';
 
-/// Google Places Nearby Search（REST）+ Demo 後備。
-///
-/// **偏好「較高評分／營業中」**：本服務回傳 Nearby 原始結果；
-/// [DecisionEngine.filterCandidates] 已排除 `openNow == false`，
-/// 並對真實店家套用最低評分／評論數；[DecisionEngine.scorePlace] 再偏高評分。
-/// 因此不在此加 `opennow` 查詢參數，避免營業中過少時整批 ZERO_RESULTS 掉進 Demo。
+/// Nearby and details both use our backend; no Google key in the client.
 class PlacesService {
-  PlacesService({
-    http.Client? client,
-    String? apiKey,
-  })  : _client = client ?? http.Client(),
-        _apiKeyOverride = apiKey;
-
-  final http.Client _client;
-
-  /// 測試用覆寫；正式路徑為 null → 走 [googlePlacesApiKey]。
-  final String? _apiKeyOverride;
-
-  static const _nearbyUrl =
-      'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
-
-  /// 最大搜尋半徑（公尺）。
+  PlacesService({http.Client? client, String? baseUrl})
+    : _backend = BackendClient(client: client, baseUrl: baseUrl);
+  final BackendClient _backend;
+  bool get isConfigured => _backend.isConfigured;
   static const int defaultRadiusMeters = 1200;
 
-  String get _effectiveKey => _apiKeyOverride ?? googlePlacesApiKey;
-
-  bool get _hasKey => _effectiveKey.isNotEmpty;
-
-  /// 取得附近餐飲；無金鑰或 API 失敗時回傳 Demo。
   Future<PlacesResult> fetchNearby({
     UserLocation? location,
     int radiusMeters = defaultRadiusMeters,
   }) async {
-    final lat = location?.lat ?? DemoPlaces.anchorLat;
-    final lng = location?.lng ?? DemoPlaces.anchorLng;
-    final usedDeviceLocation = location?.fromDevice ?? false;
-
-    if (!_hasKey) {
+    if (!isConfigured || location?.fromDevice != true) {
       return PlacesResult(
-        places: DemoPlaces.seededNear(userLat: lat, userLng: lng),
+        places: DemoPlaces.seededNear(),
         isDemo: true,
-        usedDeviceLocation: usedDeviceLocation,
-        noteZh: usedDeviceLocation
-            ? 'Demo 模式：以你的位置為中心載入示範店家'
-            : 'Demo 模式：無定位／無 API 金鑰，使用台北示範店家',
+        usedDeviceLocation: location?.fromDevice == true,
+        noteZh: !isConfigured ? '示範模式 · 店家服務尚未連線' : '示範模式 · 開啟定位後可查附近店家',
       );
     }
-
-    try {
-      final uri = Uri.parse(_nearbyUrl).replace(queryParameters: {
-        'location': '$lat,$lng',
-        'radius': '$radiusMeters',
-        'type': 'restaurant',
-        'language': 'zh-TW',
-        'key': _effectiveKey,
-      });
-      final res = await _client.get(uri).timeout(const Duration(seconds: 12));
-      if (res.statusCode != 200) {
-        return _demoFallback(
-          lat,
-          lng,
-          usedDeviceLocation,
-          'Places API HTTP ${res.statusCode}，已改用 Demo',
-        );
-      }
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final status = body['status'] as String? ?? '';
-      if (status != 'OK' && status != 'ZERO_RESULTS') {
-        return _demoFallback(
-          lat,
-          lng,
-          usedDeviceLocation,
-          _noteForApiStatus(status),
-        );
-      }
-      final results = (body['results'] as List?) ?? const [];
-      final places = <Place>[];
-      for (final raw in results) {
-        final m = raw as Map<String, dynamic>;
-        final geo = m['geometry'] as Map<String, dynamic>?;
-        final loc = geo?['location'] as Map<String, dynamic>?;
-        if (loc == null) continue;
-        final pLat = (loc['lat'] as num).toDouble();
-        final pLng = (loc['lng'] as num).toDouble();
-        final opening = m['opening_hours'] as Map<String, dynamic>?;
-        final types = (m['types'] as List?)?.cast<String>() ?? const [];
-        places.add(
-          Place(
-            id: m['place_id'] as String? ?? '${pLat}_$pLng',
-            name: m['name'] as String? ?? '未命名店家',
-            lat: pLat,
-            lng: pLng,
-            rating: (m['rating'] as num?)?.toDouble() ?? 0,
-            userRatingsTotal: m['user_ratings_total'] as int? ?? 0,
-            types: types,
-            priceLevel: m['price_level'] as int?,
-            openNow: opening?['open_now'] as bool?,
-            vicinity: m['vicinity'] as String?,
-            distanceMeters:
-                DemoPlaces.haversineMeters(lat, lng, pLat, pLng),
-            cuisineTags: _inferTags(m['name'] as String? ?? '', types),
-          ),
-        );
-      }
-      if (places.isEmpty) {
-        return _demoFallback(
-          lat,
-          lng,
-          usedDeviceLocation,
-          '附近找不到店家，已改用 Demo',
-        );
-      }
-      return PlacesResult(
-        places: places,
-        isDemo: false,
-        usedDeviceLocation: usedDeviceLocation,
-      );
-    } catch (_) {
-      return _demoFallback(
-        lat,
-        lng,
-        usedDeviceLocation,
-        '網路或 API 失敗，已改用 Demo',
-      );
-    }
-  }
-
-  /// 將 Places status 轉成清楚的繁中說明（含常見錯誤碼）。
-  static String _noteForApiStatus(String status) {
-    switch (status) {
-      case 'REQUEST_DENIED':
-        return 'Places API：REQUEST_DENIED（金鑰無效、未啟用 Places API，或限制不符），已改用 Demo';
-      case 'OVER_QUERY_LIMIT':
-        return 'Places API：OVER_QUERY_LIMIT（配額用盡），已改用 Demo';
-      case 'INVALID_REQUEST':
-        return 'Places API：INVALID_REQUEST（參數錯誤），已改用 Demo';
-      case 'UNKNOWN_ERROR':
-        return 'Places API：UNKNOWN_ERROR（伺服器暫時錯誤），已改用 Demo';
-      case 'NOT_FOUND':
-        return 'Places API：NOT_FOUND，已改用 Demo';
-      default:
-        return 'Places API：$status，已改用 Demo';
-    }
-  }
-
-  PlacesResult _demoFallback(
-    double lat,
-    double lng,
-    bool usedDeviceLocation,
-    String note,
-  ) {
-    return PlacesResult(
-      places: DemoPlaces.seededNear(userLat: lat, userLng: lng),
-      isDemo: true,
-      usedDeviceLocation: usedDeviceLocation,
-      noteZh: note,
+    final data = await _backend.json(
+      '/v1/nearby',
+      body: {
+        'lat': location!.lat,
+        'lng': location.lng,
+        'radiusMeters': radiusMeters,
+      },
     );
+    final places = (data['places'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((m) => parsePlace(m, location: location))
+        .toList();
+    return PlacesResult(
+      places: places,
+      isDemo: false,
+      usedDeviceLocation: true,
+      noteZh: places.isEmpty ? '附近找不到符合條件的店家，請稍後再試' : null,
+    );
+  }
+
+  Future<Place> fetchDetails(String placeId) async {
+    if (!isConfigured) throw const BackendException('SERVICE_NOT_CONFIGURED');
+    final data = await _backend.json(
+      '/v1/places/${Uri.encodeComponent(placeId)}',
+    );
+    if (data['id'] != placeId) throw const BackendException('INVALID_RESPONSE');
+    return parsePlace(data);
+  }
+
+  static Place parsePlace(Map<String, dynamic> m, {UserLocation? location}) {
+    final loc = m['location'] as Map<String, dynamic>?;
+    final id = m['id'];
+    if (id is! String ||
+        loc?['latitude'] is! num ||
+        loc?['longitude'] is! num) {
+      throw const BackendException('INVALID_RESPONSE');
+    }
+    final lat = (loc!['latitude'] as num).toDouble();
+    final lng = (loc['longitude'] as num).toDouble();
+    final name = (m['displayName'] as Map?)?['text'] as String? ?? '未命名店家';
+    final types = (m['types'] as List? ?? []).cast<String>();
+    const prices = {
+      'PRICE_LEVEL_FREE': 0,
+      'PRICE_LEVEL_INEXPENSIVE': 1,
+      'PRICE_LEVEL_MODERATE': 2,
+      'PRICE_LEVEL_EXPENSIVE': 3,
+      'PRICE_LEVEL_VERY_EXPENSIVE': 4,
+    };
+    final closed =
+        m['businessStatus'] != null && m['businessStatus'] != 'OPERATIONAL';
+    final hours = m['currentOpeningHours'] as Map?;
+    final openNow = closed ? false : hours?['openNow'] as bool?;
+    return Place(
+      id: id,
+      name: name,
+      lat: lat,
+      lng: lng,
+      rating: (m['rating'] as num?)?.toDouble() ?? 0,
+      userRatingsTotal: (m['userRatingCount'] as num?)?.toInt() ?? 0,
+      types: types,
+      priceLevel: prices[m['priceLevel']],
+      openNow: openNow,
+      closesAt: openNow == true && hours?['nextCloseTime'] is String
+          ? DateTime.tryParse(hours!['nextCloseTime'] as String)?.toLocal()
+          : null,
+      typeLabel: _label((m['primaryTypeDisplayName'] as Map?)?['text']),
+      vicinity: m['formattedAddress'] as String?,
+      distanceMeters: location?.fromDevice == true
+          ? DemoPlaces.haversineMeters(location!.lat, location.lng, lat, lng)
+          : null,
+      cuisineTags: _inferTags(name, types),
+      fetchedAt: DateTime.now(),
+      websiteUri: safePhotoLink(m['websiteUri']),
+      menuUri: safePhotoLink(m['menuUri']),
+      menuNote: m['menuNote'] is String ? m['menuNote'] as String : null,
+      photos: m['photos'] is List
+          ? (m['photos'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map((p) => PlacePhoto.fromGoogle(p, id))
+                .whereType<PlacePhoto>()
+                .where((p) => p.token.isNotEmpty)
+                .take(3)
+                .toList()
+          : null,
+      photosExpiresAt: m['photosExpiresAt'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(m['photosExpiresAt'] as int)
+          : null,
+      attributions: (m['attributions'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+    );
+  }
+
+  void dispose() => _backend.dispose();
+
+  static String? _label(Object? value) {
+    final text = value is String ? value.trim() : '';
+    return text.isEmpty || text.length > 20 ? null : text;
   }
 
   static List<String> _inferTags(String name, List<String> types) {
     final tags = <String>[];
     final n = name.toLowerCase();
-    if (n.contains('麵') ||
+    if (types.contains('ramen_restaurant') ||
+        n.contains('麵') ||
         n.contains('面') ||
         n.contains('拉麵') ||
         n.contains('ramen') ||
         n.contains('noodle')) {
       tags.add('麵');
-    } else if (n.contains('飯') ||
+    } else if (types.contains('sushi_restaurant') ||
+        n.contains('飯') ||
         n.contains('便當') ||
         n.contains('壽司') ||
         n.contains('rice') ||
@@ -186,13 +148,16 @@ class PlacesService {
         n.contains('沙拉') ||
         n.contains('蔬') ||
         n.contains('粥') ||
-        types.contains('health')) {
+        types.contains('health') ||
+        types.contains('vegetarian_restaurant') ||
+        types.contains('vegan_restaurant')) {
       tags.add('清淡');
     }
     if (n.contains('火鍋') ||
         n.contains('燒烤') ||
         n.contains('辣') ||
-        n.contains('炸')) {
+        n.contains('炸') ||
+        types.contains('barbecue_restaurant')) {
       tags.add('重口味');
     }
     if (types.contains('meal_takeaway')) {

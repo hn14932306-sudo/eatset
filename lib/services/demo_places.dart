@@ -10,10 +10,7 @@ class DemoPlaces {
   static const double anchorLat = 25.0478;
   static const double anchorLng = 121.5170;
 
-  static List<Place> seededNear({
-    double? userLat,
-    double? userLng,
-  }) {
+  static List<Place> seededNear({double? userLat, double? userLng}) {
     final baseLat = userLat ?? anchorLat;
     final baseLng = userLng ?? anchorLng;
 
@@ -82,7 +79,7 @@ class DemoPlaces {
         rating: 4.2,
         userRatingsTotal: 289,
         types: const ['meal_takeaway', 'food'],
-        priceLevel: 0,
+        priceLevel: 1,
         openNow: true,
         vicinity: '開封街',
         cuisineTags: const ['麵', '重口味', '外帶', '快速', '省錢'],
@@ -203,7 +200,8 @@ class DemoPlaces {
     const r = 6371000.0;
     final dLat = _rad(lat2 - lat1);
     final dLon = _rad(lon2 - lon1);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(_rad(lat1)) *
             math.cos(_rad(lat2)) *
             math.sin(dLon / 2) *

@@ -21,10 +21,7 @@ class _UndoHarness extends StatelessWidget {
       body: Column(
         children: [
           if (decision != null)
-            DecisionCard(
-              decision: decision,
-              showRealDistance: false,
-            )
+            DecisionCard(decision: decision, showRealDistance: false)
           else
             const Text('無決策'),
           FilledButton(
@@ -59,8 +56,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('tapping SnackBar 復原 restores same restaurant name on card',
-      (tester) async {
+  testWidgets('tapping SnackBar 復原 restores same restaurant name on card', (
+    tester,
+  ) async {
     final a = Place(
       id: 'demo_beef_noodle',
       name: '老王紅燒牛肉麵',
