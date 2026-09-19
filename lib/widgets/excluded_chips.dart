@@ -23,8 +23,9 @@ class _ExcludedChipsWrapState extends State<ExcludedChipsWrap> {
     final chips = widget.chips;
     final limit = widget.collapseAfter;
     final needsCollapse = chips.length > limit;
-    final visible =
-        (!_expanded && needsCollapse) ? chips.take(limit).toList() : chips;
+    final visible = (!_expanded && needsCollapse)
+        ? chips.take(limit).toList()
+        : chips;
     final hidden = needsCollapse && !_expanded ? chips.length - limit : 0;
 
     return Wrap(

@@ -12,9 +12,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets(
-      'tapping on-screen 復原「店名」 restores same restaurant + 復原 reason',
-      (tester) async {
+  testWidgets('tapping on-screen 復原「店名」 restores same restaurant + 復原 reason', (
+    tester,
+  ) async {
     final a = Place(
       id: 'demo_beef_noodle',
       name: '老王紅燒牛肉麵',
@@ -61,14 +61,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('阿美健康便當'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('undo_excluded_place')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('復原「老王紅燒牛肉麵」'), findsOneWidget);
     final undo = find.byKey(const Key('undo_excluded_place'));
     expect(undo, findsOneWidget);
     // 次要文字鈕，不是主 CTA FilledButton
-    expect(
-      tester.widget(undo),
-      isA<TextButton>(),
-    );
+    expect(tester.widget(undo), isA<TextButton>());
 
     await tester.ensureVisible(undo);
     await tester.tap(undo);
@@ -78,6 +80,11 @@ void main() {
     expect(app.current!.place.name, '老王紅燒牛肉麵');
     expect(app.current!.reasonZh, '已復原你剛才排除的店');
     expect(app.hasPendingUndo, isFalse);
+    await tester.scrollUntilVisible(
+      find.text('老王紅燒牛肉麵'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('老王紅燒牛肉麵'), findsWidgets);
     expect(find.textContaining('已復原你剛才排除的店'), findsWidgets);
     expect(find.byKey(const Key('undo_excluded_place')), findsNothing);

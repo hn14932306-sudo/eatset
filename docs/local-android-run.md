@@ -6,12 +6,12 @@ Places 金鑰步驟見 [places-setup.md](./places-setup.md)。
 ## 成功標準
 
 - `flutter run -d emulator-…` 能裝上模擬器
-- 有金鑰時底部可見「店家資料來自 Google」
-- Debug 建置下，即使模擬器 GPS 逾時，也不應一直卡在紅色「定位失敗」橫幅（會用台北測試座標）
+- 後端與金鑰就緒且取得裝置定位時底部可見「店家資料來自 Google」
+- 模擬器 GPS 逾時／Debug 備援座標只展示 Demo；取得裝置定位後才查真店
 
 ## 1. Flutter／JDK（重要）
 
-本專案與開發機對齊：
+以下為原 Windows 環境紀錄，這輪未重新驗證 Android。macOS 本輪使用 Flutter 3.44.6，請以實際建置結果確認相容性：
 
 | 項目 | 建議 |
 |------|------|
@@ -44,22 +44,19 @@ flutter devices
 
 若出現 `unauthorized`：清除 AVD 資料後冷開機，或在模擬器上允許 USB 偵錯。
 
-## 3. 帶 Places 金鑰執行
+## 3. 指定後端執行
 
 在專案根目錄（**勿把金鑰 commit／貼到聊天**）：
 
 ```powershell
 cd E:\project\eatset
 flutter pub get
-flutter run -d emulator-5554 --dart-define=GOOGLE_PLACES_API_KEY=你的金鑰
+flutter run -d emulator-5554 --dart-define=EATSET_API_BASE_URL=http://10.0.2.2:8787
 ```
 
 裝置 id 以 `flutter devices` 為準。不要選 `windows` 桌面目標（本專案未開 Windows 桌面）。
 
-Android 金鑰限制：
-
-- 套件名：`com.eatset.eatset`
-- Debug SHA-1：用本機 `debug.keystore` 取得（換電腦會變）
+先依 [後端說明](../server/README.md) 在主機啟動服務。Google 金鑰只放後端，以 API 與伺服器出口 IP 限制；不再使用 Android 套件／SHA-1 限制 REST 金鑰。正式版／真機使用 HTTPS 網址。
 
 ## 4. 定位在模擬器上的行為
 
@@ -70,8 +67,8 @@ App 行為（`lib/services/location_service.dart`）：
 1. 先 `getCurrentPosition`（短逾時）
 2. 失敗則 `getLastKnownPosition`
 3. Android 再試 `forceLocationManager: true`
-4. **僅 `kDebugMode`**：仍失敗則使用台北車站附近測試座標（`25.0478, 121.5170`），讓真 Places 可繼續驗
-5. **Release／真機**：不會走第 4 步；逾時會顯示定位失敗說明＋「開啟定位」
+4. **僅 `kDebugMode`**：仍失敗則使用台北車站附近測試座標（`25.0478, 121.5170`），僅供 Demo；不送真實 Places 查詢
+5. **Release 建置**：不會走第 4 步；逾時會顯示定位失敗說明＋「開啟定位」。Debug 真機也可能使用測試座標，仍不當成真實定位
 
 手動餵模擬器座標（較可靠）：
 
@@ -83,12 +80,9 @@ App 行為（`lib/services/location_service.dart`）：
 
 ## 5. 畫面判讀
 
-| 現象 | 意義 |
-|------|------|
-| 「店家資料來自 Google」 | 有金鑰且 Places 回傳非 Demo |
-| 「定位失敗」＋仍有 Google 歸屬 | 定位沒拿到，但 Places 可能用預設錨點查真店 |
-| 示範橫幅、無 Google 歸屬 | 無金鑰或 API 失敗降級 Demo |
-| 理由裡出現「約 N 公里」但橫幅說定位失敗 | 距離可能相對預設錨點；Debug 後備開啟後橫幅應消失 |
+- 「店家資料來自 Google」：後端回傳真實店家。
+- 示範橫幅：未設定後端或尚無装置定位，不冒充附近真店。
+- 查詢失敗：提供重試，既有紀錄仍保留；過期價格與營業狀態不再當成最新資訊。
 
 ## 6. 相關檔案
 

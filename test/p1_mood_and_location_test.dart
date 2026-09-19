@@ -10,8 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeLocationService extends LocationService {
-  LocationResult next =
-      const LocationResult.failure(LocationFailureReason.denied);
+  LocationResult next = const LocationResult.failure(
+    LocationFailureReason.denied,
+  );
   int getCalls = 0;
   bool openedAppSettings = false;
   bool openedLocationSettings = false;
@@ -107,8 +108,7 @@ void main() {
       expect(app.showMoodReselectedHint, isFalse);
     });
 
-    testWidgets('mood chip change shows 「已依心情重新決定」 snackbar',
-        (tester) async {
+    testWidgets('mood chip change shows 「已依心情重新決定」 snackbar', (tester) async {
       final a = _place(id: 'demo_a', name: '老王紅燒牛肉麵');
       final b = _place(id: 'demo_b', name: '阿美健康便當', tags: const ['飯']);
 
@@ -134,11 +134,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Expand mood disclosure
+      // Scroll to the secondary control below the restaurant card.
+      await tester.scrollUntilVisible(
+        find.text('微調心情'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('微調心情'));
       await tester.pumpAndSettle();
 
       expect(find.text('想試試新的'), findsOneWidget);
+      await tester.ensureVisible(find.text('想試試新的'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('想試試新的'));
       await tester.pump(); // start async setMood
       await tester.pumpAndSettle();
@@ -155,25 +162,24 @@ void main() {
       expect(denied.ok, isFalse);
       expect(denied.failure, LocationFailureReason.denied);
 
-      const forever =
-          LocationResult.failure(LocationFailureReason.deniedForever);
+      const forever = LocationResult.failure(
+        LocationFailureReason.deniedForever,
+      );
       expect(forever.failure, LocationFailureReason.deniedForever);
 
-      const off =
-          LocationResult.failure(LocationFailureReason.serviceDisabled);
+      const off = LocationResult.failure(LocationFailureReason.serviceDisabled);
       expect(off.failure, LocationFailureReason.serviceDisabled);
 
-      const ok = LocationResult.success(
-        UserLocation(lat: 25.0, lng: 121.5),
-      );
+      const ok = LocationResult.success(UserLocation(lat: 25.0, lng: 121.5));
       expect(ok.ok, isTrue);
       expect(ok.location!.lat, 25.0);
     });
 
     test('AppState tracks location deny flags from LocationService', () async {
       final fake = FakeLocationService()
-        ..next =
-            const LocationResult.failure(LocationFailureReason.deniedForever);
+        ..next = const LocationResult.failure(
+          LocationFailureReason.deniedForever,
+        );
 
       final app = AppState(locationService: fake);
       await app.refreshPlaces();
@@ -187,8 +193,9 @@ void main() {
 
     test('enableLocation opens app settings when deniedForever', () async {
       final fake = FakeLocationService()
-        ..next =
-            const LocationResult.failure(LocationFailureReason.deniedForever);
+        ..next = const LocationResult.failure(
+          LocationFailureReason.deniedForever,
+        );
 
       final app = AppState(locationService: fake);
       await app.enableLocation();
@@ -199,24 +206,27 @@ void main() {
       expect(app.locationOk, isFalse);
     });
 
-    test('enableLocation opens location settings when service disabled',
-        () async {
-      final fake = FakeLocationService()
-        ..next = const LocationResult.failure(
-          LocationFailureReason.serviceDisabled,
-        );
+    test(
+      'enableLocation opens location settings when service disabled',
+      () async {
+        final fake = FakeLocationService()
+          ..next = const LocationResult.failure(
+            LocationFailureReason.serviceDisabled,
+          );
 
-      final app = AppState(locationService: fake);
-      await app.enableLocation();
+        final app = AppState(locationService: fake);
+        await app.enableLocation();
 
-      expect(fake.openedLocationSettings, isTrue);
-      expect(fake.openedAppSettings, isFalse);
-      expect(app.locationServiceDisabled, isTrue);
-      expect(app.locationHelpSubtitle, contains('定位服務已關閉'));
-    });
+        expect(fake.openedLocationSettings, isTrue);
+        expect(fake.openedAppSettings, isFalse);
+        expect(app.locationServiceDisabled, isTrue);
+        expect(app.locationHelpSubtitle, contains('定位服務已關閉'));
+      },
+    );
 
-    testWidgets('banner shows locate CTA and deny copy when !locationOk',
-        (tester) async {
+    testWidgets('banner shows locate CTA and deny copy when !locationOk', (
+      tester,
+    ) async {
       final app = AppState();
       app.prefs = const UserPrefs(coldStartDone: true);
       app.nearby = [_place(id: 'demo_a', name: '示範店')];

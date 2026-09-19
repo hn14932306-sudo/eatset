@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>EatSet 成本試算</title><style>body{font:17px/1.6 system-ui;max-width:980px;margin:40px auto;padding:24px;color:#302820;background:#faf6f0}pre{white-space:pre-wrap;padding:20px;background:white;border:1px solid #ded6cc;border-radius:10px}details{margin:20px 0}summary{cursor:pointer}h1{font-size:28px}</style><h1>EatSet 訂閱成本試算</h1><p>目的：檢查 NT$69／149／199 月费是否涵蓋 API 成本。<br><br>這是情境模型，不是真實用戶數據。價格來源：https://developers.google.com/maps/billing-and-pricing/pricing（2026-09-19）。免費額度用完後首階費率，匯率假設 USD 1 = TWD 32；不含主機、稅、退款、客服、獲客和免費使用者成本。15%／30% 是抽成假設，不是已確認的帳號費率。</p><h2>計算結果</h2><pre>假設：每人每月；免費額度已用完；首階付費費率；USD 1 = TWD 32。
+不含主機、稅、退款、客服、獲客、免費用戶補貼；非實測用量。
+較少查詢: 搜尋 10, 詳情 30, 照片 30 → NT$37.12
+每日使用: 搜尋 30, 詳情 60, 照片 90 → NT$92.16
+較多查詢: 搜尋 60, 詳情 120, 照片 240 → NT$197.76
+
+每日使用情境，扣除抽成假設與 API 後的餘額（不是淨利）：
+售價 69, 抽成假設 15%: NT$-33.51
+售價 69, 抽成假設 30%: NT$-43.86
+售價 149, 抽成假設 15%: NT$34.49
+售價 149, 抽成假設 30%: NT$12.14
+售價 199, 抽成假設 15%: NT$76.99
+售價 199, 抽成假設 30%: NT$47.14
+</pre><p>每日使用情境的 API 成本為 NT$92.16；NT$69 月費無法負擔。NT$149／199 僅作定價測試，尚不能據此判定獲利或付費意願。較多查詢情境約 NT$197.76，即使月費 NT$199，扣通路費後也不足。先減少重複查詢、測試高用量分布，再定價及決定方案額度。<br><br>已以標準 Python 依序執行程式碼、保存輸出及檢查數值；環境缺 nbformat／Jupyter，尚未透過 Jupyter 核心驗證。以同目錄 subscription_costs.py 重算。</p><details><summary>查看計算程式</summary><pre>&quot;&quot;&quot;EatSet scenario model, not measured usage. Run with Python 3, no dependencies.&quot;&quot;&quot;
+from decimal import Decimal as D
+
+# Google global price list, checked 2026-09-19. First paid band, USD/request.
+# https://developers.google.com/maps/billing-and-pricing/pricing
+RATES = {&#x27;nearby&#x27;: D(&#x27;0.035&#x27;), &#x27;details&#x27;: D(&#x27;0.020&#x27;), &#x27;photos&#x27;: D(&#x27;0.007&#x27;)}
+FX = D(&#x27;32&#x27;)  # Modeling assumption, NOT a current exchange-rate quote.
+SCENARIOS = [(&#x27;較少查詢&#x27;, 10, 30, 30), (&#x27;每日使用&#x27;, 30, 60, 90), (&#x27;較多查詢&#x27;, 60, 120, 240)]
+
+def api_cost(n, d, p):
+    return (D(n)*RATES[&#x27;nearby&#x27;] + D(d)*RATES[&#x27;details&#x27;] + D(p)*RATES[&#x27;photos&#x27;])*FX
+
+rows = []
+print(&#x27;假設：每人每月；免費額度已用完；首階付費費率；USD 1 = TWD 32。&#x27;)
+print(&#x27;不含主機、稅、退款、客服、獲客、免費用戶補貼；非實測用量。&#x27;)
+for label, n, d, p in SCENARIOS:
+    cost = api_cost(n, d, p)
+    rows.append({&#x27;scenario&#x27;: label, &#x27;nearby&#x27;: n, &#x27;details&#x27;: d, &#x27;photos&#x27;: p, &#x27;api_twd&#x27;: float(cost)})
+    print(f&#x27;{label}: 搜尋 {n}, 詳情 {d}, 照片 {p} → NT${cost:.2f}&#x27;)
+print(&#x27;\n每日使用情境，扣除抽成假設與 API 後的餘額（不是淨利）：&#x27;)
+margin_rows = []
+for price in (69, 149, 199):
+    for commission in (D(&#x27;0.15&#x27;), D(&#x27;0.30&#x27;)):
+        residual = D(price)*(1-commission)-api_cost(30,60,90)
+        margin_rows.append({&#x27;price_twd&#x27;: price, &#x27;commission_percent&#x27;: int(commission*100), &#x27;residual_twd&#x27;: float(residual)})
+        print(f&#x27;售價 {price}, 抽成假設 {commission:.0%}: NT${residual:.2f}&#x27;)
+# Independent integer-cents checks of the three paid-band estimates.
+assert [r[&#x27;api_twd&#x27;] for r in rows] == [37.12, 92.16, 197.76]
+assert api_cost(0,0,0) == 0
+assert D(&#x27;199&#x27;)*D(&#x27;0.85&#x27;) - api_cost(30,60,90) == D(&#x27;76.99&#x27;)
+</pre></details>

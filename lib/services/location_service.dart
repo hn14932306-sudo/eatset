@@ -17,10 +17,13 @@ class UserLocation {
 enum LocationFailureReason {
   /// 系統定位服務關閉（GPS / Location Services off）。
   serviceDisabled,
+
   /// 權限被拒（尚可再請求）。
   denied,
+
   /// 永久拒絕（需到系統設定開啟）。
   deniedForever,
+
   /// 其他錯誤（逾時、平台不支援等）。
   error,
 }

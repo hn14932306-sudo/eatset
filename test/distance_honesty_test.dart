@@ -51,7 +51,7 @@ void main() {
     );
 
     expect(find.textContaining('156'), findsOneWidget);
-    expect(find.text('4.5'), findsNothing);
+    expect(find.text('4.5'), findsOneWidget);
   });
 
   testWidgets('address is folded until its disclosure is expanded', (

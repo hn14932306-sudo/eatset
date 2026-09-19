@@ -48,3 +48,11 @@ app.*.map.json
 lib/config/api_keys.local.dart
 .env
 *.local.dart
+
+# Backend runtime state and server-only secrets
+server/.env*
+!server/.env.example
+server/data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

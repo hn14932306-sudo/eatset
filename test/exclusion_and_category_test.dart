@@ -24,14 +24,8 @@ void main() {
   });
 
   test('inferCategoryForPlace falls back to name keywords', () {
-    expect(
-      AppState.inferCategoryForPlace(place(id: '2', name: '老王牛肉麵')),
-      '麵',
-    );
-    expect(
-      AppState.inferCategoryForPlace(place(id: '3', name: '麻辣火鍋')),
-      '火鍋',
-    );
+    expect(AppState.inferCategoryForPlace(place(id: '2', name: '老王牛肉麵')), '麵');
+    expect(AppState.inferCategoryForPlace(place(id: '3', name: '麻辣火鍋')), '火鍋');
   });
 
   test('inferCategoryForPlace returns null when unknown', () {

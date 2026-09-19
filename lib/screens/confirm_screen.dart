@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/place.dart';
 import '../services/maps_launcher.dart';
+import '../widgets/place_photo_gallery.dart';
 
 /// S7 決定完成：短收束後再開地圖（設計 v1 P0／P1-1 失敗態）。
 class ConfirmScreen extends StatefulWidget {
@@ -42,7 +43,12 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
       _failureMessage = null;
     });
     final opener = widget.openMapsOverride ?? MapsLauncher.openPlace;
-    final ok = await opener(widget.place);
+    var ok = false;
+    try {
+      ok = await opener(widget.place);
+    } catch (_) {
+      // A missing native URL handler must leave retry available.
+    }
     if (!mounted) return;
     setState(() {
       _opening = false;
@@ -52,8 +58,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
       } else if (ok && _showCopyLink) {
         // Web: url_launcher often returns true even when the popup is blocked.
         _mapsFailed = false;
-        _failureMessage =
-            '若沒看到地圖分頁，請允許彈出式視窗，或用下方複製連結';
+        _failureMessage = '若沒看到地圖分頁，請允許彈出式視窗，或用下方複製連結';
       } else {
         _mapsFailed = true;
         _failureMessage = _showCopyLink
@@ -65,11 +70,16 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
 
   Future<void> _copyMapsLink() async {
     final uri = MapsLauncher.mapsSearchUri(widget.place);
-    await Clipboard.setData(ClipboardData(text: uri.toString()));
+    var message = '已複製地圖連結';
+    try {
+      await Clipboard.setData(ClipboardData(text: uri.toString()));
+    } catch (_) {
+      message = '複製失敗，請再試一次';
+    }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已複製地圖連結')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -79,108 +89,142 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              Icon(
-                _mapsFailed
-                    ? Icons.map_outlined
-                    : Icons.check_circle_rounded,
-                size: 72,
-                color: _mapsFailed ? scheme.error : scheme.primary,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: (constraints.maxHeight - 48).clamp(
+                  0,
+                  double.infinity,
+                ),
               ),
-              const SizedBox(height: 20),
-              Text(
-                '就這家了',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
+                  Icon(
+                    _mapsFailed
+                        ? Icons.map_outlined
+                        : Icons.check_circle_rounded,
+                    size: 56,
+                    color: _mapsFailed ? scheme.error : scheme.primary,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '就這家了',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                place.name,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              if (widget.isDemo) ...[
-                const SizedBox(height: 12),
-                Text(
-                  '示範流程完成 · 開啟地圖可看位置',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-              if (_showCopyLink && !_mapsFailed) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '網頁版可能受瀏覽器限制；地圖體驗建議用 App',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-              if (_failureMessage != null) ...[
-                const SizedBox(height: 20),
-                Material(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Text(
-                      _failureMessage!,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    place.name,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (place.vicinity?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      place.vicinity!.trim(),
+                      key: const Key('confirm_address'),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: scheme.onErrorContainer,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (!widget.isDemo && !place.isDemo) ...[
+                    const SizedBox(height: 16),
+                    // Only a photo the user has already seen: no new request.
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: PlacePhotoGallery(
+                        place: place,
+                        compact: true,
+                        autoLoad: false,
+                        cachedOnly: true,
+                      ),
+                    ),
+                  ],
+                  if (widget.isDemo) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      '示範流程完成 · 開啟地圖可看位置',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (_showCopyLink && !_mapsFailed) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '網頁版可能受瀏覽器限制；地圖體驗建議用 App',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (_failureMessage != null) ...[
+                    const SizedBox(height: 20),
+                    Material(
+                      color: scheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Text(
+                          _failureMessage!,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: scheme.onErrorContainer),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: _opening ? null : _openMaps,
+                    icon: _opening
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _mapsFailed ? Icons.refresh : Icons.map_outlined,
                           ),
+                    label: Text(_mapsFailed ? '再試一次' : '開啟地圖'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
                     ),
                   ),
-                ),
-              ],
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _opening ? null : _openMaps,
-                icon: _opening
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        _mapsFailed ? Icons.refresh : Icons.map_outlined,
+                  if (_showCopyLink) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _copyMapsLink,
+                      icon: const Icon(Icons.link),
+                      label: const Text('複製地圖連結'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
                       ),
-                label: Text(_mapsFailed ? '再試一次' : '開啟地圖'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
-              ),
-              if (_showCopyLink) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _copyMapsLink,
-                  icon: const Icon(Icons.link),
-                  label: const Text('複製地圖連結'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('稍後再說'),
                   ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('稍後再說'),
+                  const SizedBox(height: 16),
+                ],
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
         ),
       ),
